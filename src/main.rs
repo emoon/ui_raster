@@ -86,8 +86,12 @@ fn copy_tile_to_output_buffer(
 }
 
 fn main() {
-    let _srgb_to_linear = build_srgb_to_linear_table();
-    let _linear_to_srgb = build_linear_to_srgb_table();
+    let srgb_to_linear = build_srgb_to_linear_table();
+    let linear_to_srgb = build_linear_to_srgb_table();
+
+    let tile_width = 1280;
+    let tile_height = 512;
+    let mut output = vec![0i16; tile_width * tile_height * 4];
 
     let mut window = Window::new(
         "Test - ESC to exit",
@@ -108,13 +112,35 @@ fn main() {
     window.set_target_fps(60);
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in buffer.iter_mut() {
+        for i in output.iter_mut() {
             *i = 0;
         }
 
+        let x0_data = [10.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+        let y0_data = [10.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+        let x1_data = [1101.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+        let y1_data = [500.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+
+        let tile_info = ui_raster::TileInfo {
+            width: tile_width as _,
+            height: tile_height as _,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        };
+
         unsafe {
-            ui_raster::ispc_raster();
+            ui_raster::ispc_raster(
+                output.as_mut_ptr(),
+                &tile_info,
+                x0_data.as_ptr(),
+                y0_data.as_ptr(),
+                x1_data.as_ptr(),
+                y1_data.as_ptr(),
+                1
+            );
         }
+
+        copy_tile_to_output_buffer(&mut buffer, &output, &linear_to_srgb, tile_width, tile_height, WIDTH);
 
         window
             .update_with_buffer(&buffer, WIDTH, HEIGHT)
