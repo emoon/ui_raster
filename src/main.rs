@@ -1,6 +1,10 @@
 use ispc_rt::ispc_module;
+use minifb::{Key, Window, WindowOptions, Scale};
 
 ispc_module!(ui_raster);
+
+const WIDTH: usize = 1280;
+const HEIGHT: usize = 720;
 
 const SRGB_BIT_COUNT: u32 = 12;
 const LINEAR_BIT_COUNT: u32 = 15;
@@ -85,7 +89,35 @@ fn main() {
     let _srgb_to_linear = build_srgb_to_linear_table();
     let _linear_to_srgb = build_linear_to_srgb_table();
 
-    unsafe {
-        ui_raster::ispc_raster();
+    let mut window = Window::new(
+        "Test - ESC to exit",
+        WIDTH,
+        HEIGHT,
+        WindowOptions {
+            scale: Scale::X1,
+            ..WindowOptions::default()
+        },
+    )
+    .unwrap_or_else(|e| {
+        panic!("{}", e);
+    });
+
+    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+
+    // Limit to max ~60 fps update rate
+    window.set_target_fps(60);
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        for i in buffer.iter_mut() {
+            *i = 0;
+        }
+
+        unsafe {
+            ui_raster::ispc_raster();
+        }
+
+        window
+            .update_with_buffer(&buffer, WIDTH, HEIGHT)
+            .unwrap();
     }
 }
