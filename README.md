@@ -5,54 +5,54 @@ The plan is to first implement an ISPC version, followed by an intrinsic version
 
 ## ISPC Implementation status
 
-## 1. Basic Shape Drawing
+### 1. Basic Shape Drawing
 - [ ] Draw rectangles.
 - [ ] Draw rectangles with rounded corners.
 
-## 2. Text and Image Rendering
+### 2. Text and Image Rendering
 - [ ] Draw text.
 - [ ] Draw images.
 
-## 3. Styling and Effects
+### 3. Styling and Effects
 - [ ] Draw borders.
 - [ ] Support clipping for contained drawing.
 
-## 4. Advanced Rendering Features
+### 4. Advanced Rendering Features
 - [ ] Support vertex color interpolation across rectangles.
 - [ ] Implement pre-multiplied alpha blending.
 - [ ] Enable full subpixel rendering.
 - [ ] Render in linear color space using 16-bit components per channel.
 
-## 5. Texture Sampling
+### 5. Texture Sampling
 - [ ] Sample textures with bilinear filtering.
 
-## 6. Code Structure
+### 6. Code Structure
 - [ ] Create code permutations to optimize based on rendering primitives.
 
 ## Intrinsic Implementation status
 
-## 1. Basic Shape Drawing
+### 1. Basic Shape Drawing
 - [ ] Draw rectangles.
 - [ ] Draw rectangles with rounded corners.
 
-## 2. Text and Image Rendering
+### 2. Text and Image Rendering
 - [ ] Draw text.
 - [ ] Draw images.
 
-## 3. Styling and Effects
+### 3. Styling and Effects
 - [ ] Draw borders.
 - [ ] Support clipping for contained drawing.
 
-## 4. Advanced Rendering Features
+### 4. Advanced Rendering Features
 - [ ] Support vertex color interpolation across rectangles.
 - [ ] Implement pre-multiplied alpha blending.
 - [ ] Enable full subpixel rendering.
 - [ ] Render in linear color space using 16-bit components per channel.
 
-## 5. Texture Sampling
+### 5. Texture Sampling
 - [ ] Sample textures with bilinear filtering.
 
-## 6. Code Structure
+### 6. Code Structure
 - [ ] Create code permutations to optimize based on rendering primitives.
 
 
