@@ -31,7 +31,7 @@ fn build_srgb_to_linear_table() -> [u16; 1 << 8] {
     let mut table = [0; 1 << 8];
 
     for i in 0..(1 << 8) {
-        let srgb = i as f32 / (1 << 8) as f32;
+        let srgb = i as f32 / 255.0;
         let linear = srgb_to_linear(srgb);
         table[i] = (linear * ((1 << LINEAR_BIT_COUNT) - 1) as f32) as u16;
     }
@@ -122,10 +122,9 @@ fn main() {
         let y1_data = [500.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
 
         let tile_info = ui_raster::TileInfo {
+            data: [0.0, 0.0, 0.0, 0.0],
             width: tile_width as _,
             height: tile_height as _,
-            offset_x: 0.0,
-            offset_y: 0.0,
         };
 
         unsafe {
