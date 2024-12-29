@@ -7,7 +7,7 @@ The plan is to first implement an ISPC version, followed by an intrinsic version
 ## ISPC Implementation status
 
 ### 1. Basic Shape Drawing
-- [ ] Draw rectangles.
+- [x] Draw rectangles.
 - [ ] Draw rectangles with rounded corners.
 
 ### 2. Text and Image Rendering
@@ -19,10 +19,10 @@ The plan is to first implement an ISPC version, followed by an intrinsic version
 - [ ] Support clipping for contained drawing.
 
 ### 4. Rendering Features
-- [ ] Support vertex color interpolation across rectangles.
+- [x] Support vertex color interpolation across rectangles.
 - [ ] Implement pre-multiplied alpha blending.
 - [ ] Enable full subpixel rendering.
-- [ ] Render in linear color space using 16-bit components per channel.
+- [x] Render in linear color space using 16-bit components per channel.
 
 ### 5. Texture Sampling
 - [ ] Sample textures with bilinear filtering.
