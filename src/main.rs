@@ -1,5 +1,5 @@
 use ispc_rt::ispc_module;
-use minifb::{Key, Window, WindowOptions, Scale};
+use minifb::{Key, Scale, Window, WindowOptions};
 
 ispc_module!(ui_raster);
 
@@ -85,6 +85,13 @@ fn copy_tile_to_output_buffer(
     }
 }
 
+fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i16, i16, i16, i16) {
+    let r = srgb_to_linear[r as usize] as i16;
+    let g = srgb_to_linear[g as usize] as i16;
+    let b = srgb_to_linear[b as usize] as i16;
+    (r, g, b, (a as i16) << 7)
+} 
+
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
@@ -116,33 +123,44 @@ fn main() {
             *i = 0;
         }
 
-        let x0_data = [10.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
-        let y0_data = [10.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
-        let x1_data = [1101.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
-        let y1_data = [500.0f32, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
-
         let tile_info = ui_raster::TileInfo {
-            data: [0.0, 0.0, 0.0, 0.0],
+            data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             width: tile_width as _,
             height: tile_height as _,
         };
 
+        let t0 = color_from_u8(&srgb_to_linear, 255, 0, 0, 255);
+        let t1 = color_from_u8(&srgb_to_linear, 255, 0, 0, 255);
+        let top_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
+
+        let t0 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
+        let t1 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
+        let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
+
+        let coords = [
+            10.0, 10.0, 100.0, 100.0,
+            1.0, 1.0, 2.0, 2.0,
+        ];
+
         unsafe {
-            ui_raster::ispc_raster(
+            ui_raster::ispc_raster_rectangle_solid_lerp_color(
                 output.as_mut_ptr(),
                 &tile_info,
-                x0_data.as_ptr(),
-                y0_data.as_ptr(),
-                x1_data.as_ptr(),
-                y1_data.as_ptr(),
-                1
+                coords.as_ptr(),
+                top_colors.as_ptr(),
+                bottom_colors.as_ptr(),
             );
         }
 
-        copy_tile_to_output_buffer(&mut buffer, &output, &linear_to_srgb, tile_width, tile_height, WIDTH);
+        copy_tile_to_output_buffer(
+            &mut buffer,
+            &output,
+            &linear_to_srgb,
+            tile_width,
+            tile_height,
+            WIDTH,
+        );
 
-        window
-            .update_with_buffer(&buffer, WIDTH, HEIGHT)
-            .unwrap();
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }

@@ -36,7 +36,7 @@ int16 lerp_16x8(int16 a, int16 b, int16 t) {
 #endif
 
 struct TileInfo {
-    uniform float data[4]; 
+    uniform float data[8]; 
     uniform float width;
     uniform float height;
 };
@@ -44,6 +44,8 @@ struct TileInfo {
 static const varying int16 shuffle_alpha = { 3,3,3,8, 7,7,7,8 };
 static const varying int16 start_x_step_adjust  = { 0,0,0,0, 1,1,1,1 };
 static const varying int16 shuffle_write_odd = { 4,5,6,7, 8,9,10,11 };
+static const varying int16 shuffle_colors_left = { 0,1,2,3, 0,1,2,3 };
+static const varying int16 shuffle_colors_right = { 4,5,6,7, 4,6,6,7 };
 
 enum ProcessPixelCount {
     ProcessPixelCount_1 = 1,
@@ -58,28 +60,32 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
     const uniform float x0y0x1y1_data[],
-    const int16 top_colors,
-    const int16 bottom_colors)
+    const uniform int16 top_colors_a[],
+    const uniform int16 bottom_colors_a[])
 {
+    int16 top_colors = top_colors_a[programIndex];
+    int16 bottom_colors = top_colors_a[programIndex];
+
     // adjust for sub-pixel offset
     float x0y0x1y1 = floor((x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5);
     float x_min_step = 0.0;
     float y_min_step = 0.0;
 
     int x0y0x1y1_int = (int)x0y0x1y1; 
-    int16 yi_step = 0; // step value y (0 - 1) across the quad (but 0 - 0x7FFF int16 range) 
-    int16 xi_step = 0; // step value x (0 - 1) across the quad (but 0 - 0x7FFF int16 range) 
+    uniform int16 yi_step = 0; // step value y (0 - 1) across the quad (but 0 - 0x7FFF int16 range) 
+    uniform int16 xi_step = 0; // step value x (0 - 1) across the quad (but 0 - 0x7FFF int16 range) 
     int16 xi_start = 0;
     int16 yi_start = 0;
 
     if (ColorInterpolate) {
-        float x0x0y0y0 = shuffle(x0y0x1y1, x0y0x1y1, 0xAA);
-        float x1x1y1y1 = shuffle(x0y0x1y1, x0y0x1y1, 0x55);
+        float x0x0y0y0 = shuffle(x0y0x1y1, x0y0x1y1, 0xA);
+        float x1x1y1y1 = shuffle(x0y0x1y1, x0y0x1y1, 0x5);
 
         float xy_diff = x1x1y1y1 - x0x0y0y0;
         float xy_step = 32767.0 / xy_diff;
 
-        yi_step = (int16)extract(xy_step, 1);
+        xi_step = (uniform int16)extract(xy_step, 0);
+        yi_step = (uniform int16)extract(xy_step, 1);
 
         if (Clipping) {
             uniform int x0_i = extract(x0y0x1y1_int, 0);
@@ -105,14 +111,18 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     uniform int y1 = extract(x0y0x1y1_int, 3);
 
     if (Clipping) {
-        x0 = max(0, x0);
-        y0 = max(0, y0);
+        x0 = max((uniform int)0, x0);
+        y0 = max((uniform int)0, y0);
         x1 = min(x1, (uniform int)tile_info->width);
         y1 = min(y1, (uniform int)tile_info->height);
     }
 
     uniform int ylen = y1 - y0;
     uniform int xlen = x1 - x0;
+
+    assume(ylen > 0);
+    assume(xlen > 0);
+
     uniform int write_start = ((y0 * tile_info->width) + x0) * 4;
     uniform int16* tile_output = &output[write_start];
 
@@ -132,12 +142,12 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
         if (ColorInterpolate) {
             // colors on the left and right side of the quad
             int16 left_right_colors = lerp_16x8_diff(top_colors, color_top_bottom_diff, yi_start);
-            left_colors = shuffle(left_right_colors, left_right_colors, 0);
-            right_colors = shuffle(left_right_colors, left_right_colors, 3);
+            left_colors = shuffle(left_right_colors, shuffle_colors_left);
+            right_colors = shuffle(left_right_colors, shuffle_colors_right);
             color_diff = left_colors - right_colors; 
         }
                 
-        x_step_current = xi_step;
+        x_step_current = xi_start;
                 
         for (uniform int x = 0; x < (xlen >> 1); x++) {
             if (ColorInterpolate) {
@@ -149,7 +159,7 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
                 int16 alpha = shuffle(current_color, (uniform int16)0x7fff, shuffle_alpha);
                 current_color = mul_16x8_high(current_color, alpha);
             }
-                    
+            
             int16 rgba_out = process_pixel<ProcessPixelCount_2>(current_color);
         
             uniform int index = ((y * tile_info->width) + (x << 1)) * 4;
@@ -190,12 +200,11 @@ export void ispc_raster_rectangle_solid(
 export void ispc_raster_rectangle_solid_lerp_color(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
-    const uniform float x0_data[],
-    const uniform float y0_data[], 
-    const uniform float x1_data[], 
-    const uniform float y1_data[], 
-    uniform int count)
+    const uniform float x0y0x1y1[],
+    const uniform int16 top_colors[],
+    const uniform int16 bottom_colors[])
 {
+    render_internal<true, false>(output, tile_info, x0y0x1y1, top_colors, bottom_colors);
 }
 
 export void ispc_raster(
