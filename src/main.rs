@@ -105,7 +105,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X4,
             ..WindowOptions::default()
         },
     )
@@ -129,11 +129,11 @@ fn main() {
             height: tile_height as _,
         };
 
-        let t0 = color_from_u8(&srgb_to_linear, 255, 0, 0, 255);
-        let t1 = color_from_u8(&srgb_to_linear, 255, 0, 0, 255);
+        let t0 = color_from_u8(&srgb_to_linear, 0, 0, 0, 255);
+        let t1 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
         let top_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
-        let t0 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
+        let t0 = color_from_u8(&srgb_to_linear, 0, 0, 0, 255);
         let t1 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
         let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 

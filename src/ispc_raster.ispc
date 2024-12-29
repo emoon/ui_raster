@@ -5,8 +5,6 @@ int mul_16x8_high(int16 a, int16 b) {
     return @llvm.aarch64.neon.sqrdmulh(a, b);
 }
     
-return return @llvm.aarch64.neon.sqrdmulh(a, diff, t);
-
 int16 lerp_16x8_diff(int16 a, int16 diff, int16 t) {
     return return @llvm.aarch64.neon.sqrdmlah(a, diff, t);
 }
@@ -19,7 +17,7 @@ int16 lerp_16x8(int16 a, int16 b, int16 t) {
 #else
 
 int mul_16x8_high(int16 a, int16 b) {
-    int16 temp = @llvm.x86.ssse3.pmul.hr.sw.128(a, b);
+    return @llvm.x86.ssse3.pmul.hr.sw.128(a, b);
 }
 
 int16 lerp_16x8_diff(int16 a, int16 diff, int16 t) {
@@ -45,7 +43,9 @@ static const varying int16 shuffle_alpha = { 3,3,3,8, 7,7,7,8 };
 static const varying int16 start_x_step_adjust  = { 0,0,0,0, 1,1,1,1 };
 static const varying int16 shuffle_write_odd = { 4,5,6,7, 8,9,10,11 };
 static const varying int16 shuffle_colors_left = { 0,1,2,3, 0,1,2,3 };
-static const varying int16 shuffle_colors_right = { 4,5,6,7, 4,6,6,7 };
+static const varying int16 shuffle_colors_right = { 4,5,6,7, 4,5,6,7 };
+static const varying int shuffle_x0x0y0y0 = { 0,0,1,1, 0,0,1,1 };
+static const varying int shuffle_x1x1y1y1 = { 2,2,3,3, 2,2,3,3 };
 
 enum ProcessPixelCount {
     ProcessPixelCount_1 = 1,
@@ -64,7 +64,7 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     const uniform int16 bottom_colors_a[])
 {
     int16 top_colors = top_colors_a[programIndex];
-    int16 bottom_colors = top_colors_a[programIndex];
+    int16 bottom_colors = bottom_colors_a[programIndex];
 
     // adjust for sub-pixel offset
     float x0y0x1y1 = floor((x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5);
@@ -78,8 +78,8 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     int16 yi_start = 0;
 
     if (ColorInterpolate) {
-        float x0x0y0y0 = shuffle(x0y0x1y1, x0y0x1y1, 0xA);
-        float x1x1y1y1 = shuffle(x0y0x1y1, x0y0x1y1, 0x5);
+        float x0x0y0y0 = shuffle(x0y0x1y1, shuffle_x0x0y0y0);
+        float x1x1y1y1 = shuffle(x0y0x1y1, shuffle_x1x1y1y1);
 
         float xy_diff = x1x1y1y1 - x0x0y0y0;
         float xy_step = 32767.0 / xy_diff;
@@ -135,7 +135,7 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     int16 x_step_current = 0;
 
     if (ColorInterpolate) {
-        color_top_bottom_diff = top_colors - bottom_colors;
+        color_top_bottom_diff = bottom_colors - top_colors;
     }
 
     for (uniform int y = 0; y < ylen; ++y) {
@@ -144,9 +144,9 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
             int16 left_right_colors = lerp_16x8_diff(top_colors, color_top_bottom_diff, yi_start);
             left_colors = shuffle(left_right_colors, shuffle_colors_left);
             right_colors = shuffle(left_right_colors, shuffle_colors_right);
-            color_diff = left_colors - right_colors; 
+            color_diff = right_colors - left_colors;
         }
-                
+
         x_step_current = xi_start;
                 
         for (uniform int x = 0; x < (xlen >> 1); x++) {
