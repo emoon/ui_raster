@@ -1,5 +1,7 @@
 use ispc_rt::ispc_module;
 use minifb::{Key, Scale, Window, WindowOptions};
+use png::{Decoder, Transformations};
+use std::fs::File;
 
 ispc_module!(ui_raster);
 
@@ -85,6 +87,43 @@ fn copy_tile_to_output_buffer(
     }
 }
 
+struct Texture {
+    data: Vec<u16>,
+    width: usize,
+    height: usize,
+}
+
+fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
+   let mut decoder = Decoder::new(File::open(path).unwrap());
+
+    // Reading the image in RGBA format.
+    decoder.set_transformations(Transformations::ALPHA);
+
+    let mut reader = decoder.read_info().unwrap();
+    let size = reader.output_buffer_size();
+
+    let mut u8_buffer = vec![0u8; size]; 
+    let mut data = Vec::with_capacity(size * 4);
+
+    // Read the next frame. Currently this function should only be called once.
+    reader.next_frame(&mut u8_buffer).unwrap();
+
+    for t in &u8_buffer {
+        let temp = srgb_to_linear[*t as usize];
+        data.push(temp);
+    }
+
+    let width = reader.info().width as usize;
+    let height = reader.info().height as usize;
+
+    Texture {
+        data,
+        width,
+        height,
+    }
+}
+
+
 fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i16, i16, i16, i16) {
     let r = srgb_to_linear[r as usize] as i16;
     let g = srgb_to_linear[g as usize] as i16;
@@ -95,6 +134,7 @@ fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i1
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
+    let _texture = read_texture("assets/uv.png", &srgb_to_linear);
 
     let tile_width = 1280;
     let tile_height = 512;
