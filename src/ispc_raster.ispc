@@ -54,7 +54,23 @@ enum ProcessPixelCount {
     ProcessPixelCount_2 = 2,
 };
 
-template <ProcessPixelCount PixelCount, bool TextureAlignedUVs> 
+enum TextureUvMode {
+    TextureUvMode_None = 0,
+    TextureUvMode_Aligned = 1,
+    TextureUvMode_Unaligned = 2,
+};
+
+enum ClippingMode {
+    ClippingMode_None = 0,
+    ClippingMode_Clipping = 1,
+};
+
+enum ColorInterpolationMode {
+    ColorInterpolationMode_None = 0,
+    ColorInterpolationMode_Lerp = 1,
+};
+
+template <ProcessPixelCount PixelCount, TextureUvMode TextureMode> 
     unmasked int process_pixel(int16 color, const int16* uniform texture_ptr, int16 fixed_texture_fraction, int texture_width) 
 {
     varying int16 tex_rgba_rgba_0 = 0;
@@ -62,26 +78,26 @@ template <ProcessPixelCount PixelCount, bool TextureAlignedUVs>
     varying int16 texture_fraction = fixed_texture_fraction;
     varying int16 tex_rgba0 = 0;
 
-    if (TextureAlignedUVs) {
+    if (TextureMode == TextureUvMode_Aligned) {
         // samples two texels from the texture
         tex_rgba_rgba_0 = texture_ptr[programIndex];
         tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width];
     }
 
-    if (TextureAlignedUVs) {
+    if (TextureMode == TextureUvMode_Aligned) {
         varying int16 t0_t1 = lerp_16x8(tex_rgba_rgba_0, tex_rgba_rgba_1, extract(fixed_texture_fraction, 1)); // lerp in y direction
         varying int16 t = rotate(t0_t1, 4); // rotate so we can lerp in x direction
         tex_rgba0 = lerp_16x8(t, t, extract(fixed_texture_fraction, 0)); // lerp in x direction
     } 
 
     if (PixelCount == ProcessPixelCount_2) {
-        if (TextureAlignedUVs) {
+        if (TextureMode == TextureUvMode_Aligned) {
             // samples two texels from the texture
             tex_rgba_rgba_0 = texture_ptr[programIndex + 4];
             tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width + 4];
         }
 
-        if (TextureAlignedUVs) {
+        if (TextureMode == TextureUvMode_Aligned) {
             varying int16 t0_t1 = lerp_16x8(tex_rgba_rgba_0, tex_rgba_rgba_1, extract(fixed_texture_fraction, 1)); // lerp in y direction
             varying int16 t = rotate(t0_t1, 4); // rotate so we can lerp in x direction
             varying int16 tex_rgba1 = lerp_16x8(t, t, extract(fixed_texture_fraction, 0)); // lerp in x direction
@@ -89,7 +105,7 @@ template <ProcessPixelCount PixelCount, bool TextureAlignedUVs>
         } 
     }
 
-    if (TextureAlignedUVs) {
+    if (TextureMode == TextureUvMode_Aligned) {
         varying int16 one_minus_alpha = 0x7fff - shuffle(color, color, shuffle_splat_alpha); 
         color = lerp_16x8(color, tex_rgba0, one_minus_alpha);
     }
@@ -97,7 +113,9 @@ template <ProcessPixelCount PixelCount, bool TextureAlignedUVs>
     return color;
 }
 
-template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAlignedUVs> unmasked void render_internal(
+template <ColorInterpolationMode ColorInterpolate, 
+          ClippingMode Clipping, 
+          TextureUvMode TextureMode> unmasked void render_internal(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
     const uniform int16 texture_data[],
@@ -116,12 +134,12 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
     float x0y0x1y1 = floor(x0y0x1y1_adjust);
     float uv = 0.0;
 
-    if (Texture || TextureAlignedUVs) {
+    if (TextureMode > TextureUvMode_None) {
         uv = uv_data[programIndex];
         uv *= texture_size[programIndex];
         float uv_fraction = (x0y0x1y1_adjust - x0y0x1y1);
 
-        if (Texture) {
+        if (TextureMode == TextureUvMode_Unaligned) {
             // Adjust UVs for sub-pixel offset based on the fractional part of the quads position
             uv += uv_fraction; 
         } else {
@@ -140,7 +158,10 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
     int16 xi_start = 0;
     int16 yi_start = 0;
 
-    if (ColorInterpolate || Texture || TextureAlignedUVs) {
+    if (ColorInterpolate == ColorInterpolationMode_Lerp 
+     || Clipping == ClippingMode_Clipping
+     || TextureMode > TextureUvMode_None) 
+    {
         float x0x0y0y0 = shuffle(x0y0x1y1, shuffle_x0x0y0y0);
         float x1x1y1y1 = shuffle(x0y0x1y1, shuffle_x1x1y1y1);
 
@@ -178,11 +199,11 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
     const int16* uniform texture_ptr = 0;
     uniform int texture_width = 0;
 
-    if (TextureAlignedUVs || Texture) {
+    if (TextureMode > TextureUvMode_None) {
         texture_width = extract(texture_size[programIndex], 0); 
         texture_ptr = &texture_data[0];
 
-        if (TextureAlignedUVs) {
+        if (TextureMode == TextureUvMode_Aligned) {
             uniform int u0 = (uniform int)extract(uv, 0);
             uniform int v0 = (uniform int)extract(uv, 1);
             uniform int texture_start = ((v0 * texture_width) + u0);
@@ -219,12 +240,12 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
     int16 right_colors = 0;
     int16 x_step_current = 0;
 
-    if (ColorInterpolate) {
+    if (ColorInterpolate == ColorInterpolationMode_Lerp) {
         color_top_bottom_diff = bottom_colors - top_colors;
     }
 
     for (uniform int y = 0; y < ylen; ++y) {
-        if (ColorInterpolate) {
+        if (ColorInterpolate == ColorInterpolationMode_Lerp) {
             // colors on the left and right side of the quad
             int16 left_right_colors = lerp_16x8_diff(top_colors, color_top_bottom_diff, yi_start);
             left_colors = shuffle(left_right_colors, shuffle_colors_left);
@@ -236,7 +257,7 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
         x_step_current = xi_start;
                 
         for (uniform int x = 0; x < (xlen >> 1); x++) {
-            if (ColorInterpolate) {
+            if (ColorInterpolate == ColorInterpolationMode_Lerp) {
                 current_color = lerp_16x8_diff(left_colors, color_diff, x_step_current);
                 // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
                 // This will generate a value that looks like:
@@ -246,17 +267,17 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
                 current_color = mul_16x8_high(current_color, alpha);
             }
 
-            int16 rgba_out = process_pixel<ProcessPixelCount_2, TextureAlignedUVs>(
+            int16 rgba_out = process_pixel<ProcessPixelCount_2, TextureMode>(
                 current_color, texture_ptr, fixed_texture_fraction, texture_width);
         
             uniform int index = ((y * tile_info->width) + (x << 1)) * 4;
             tile_output[index + programIndex] = rgba_out;
 
-            if (TextureAlignedUVs) {
-                texture_ptr += 2;
+            if (TextureMode == TextureUvMode_Aligned) {
+                texture_ptr += 4;
             } 
 
-            if (ColorInterpolate) {
+            if (ColorInterpolate == ColorInterpolationMode_Lerp) {
                 x_step_current += xi_step; 
             }
         }
@@ -265,18 +286,18 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
         if (xlen & 1) {
             uniform int index = ((y * tile_info->width) + xlen - 1) * 4;
             int16 backbuffer = tile_output[index + programIndex];
-            int16 rgba_out = process_pixel<ProcessPixelCount_1, TextureAlignedUVs>(
+            int16 rgba_out = process_pixel<ProcessPixelCount_1, TextureMode>(
                 current_color, texture_ptr, fixed_texture_fraction, texture_width);
             // if we have an uneven pixel to write we need to load the current output
             // and mask it with the data we want to write so we only write the first part of it
             tile_output[index + programIndex] = shuffle(rgba_out, backbuffer, shuffle_write_odd);
         }
 
-        if (ColorInterpolate) {
+        if (ColorInterpolate == ColorInterpolationMode_Lerp) {
             yi_start += yi_step;
         }
 
-        if (TextureAlignedUVs) {
+        if (TextureMode == TextureUvMode_Aligned) {
             texture_ptr += texture_width - xlen;
         }
     }
@@ -292,7 +313,8 @@ export void ispc_raster_fixed_texture_solid(
     const uniform int16 top_colors_a[],
     const uniform int16 bottom_colors_a[])
 {
-    render_internal<false, false, false, true>(output, tile_info, texture_data, uv_data, texture_size, x0y0x1y1_data, top_colors_a, bottom_colors_a);
+    render_internal<ColorInterpolationMode_None, ClippingMode_None, TextureUvMode_Aligned>(
+        output, tile_info, texture_data, uv_data, texture_size, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
 export void ispc_raster_rectangle_solid(
@@ -302,7 +324,8 @@ export void ispc_raster_rectangle_solid(
     const uniform int16 top_colors_a[],
     const uniform int16 bottom_colors_a[])
 {
-    render_internal<false, false, false, false>(output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors_a, bottom_colors_a);
+    render_internal<ColorInterpolationMode_None, ClippingMode_None, TextureUvMode_None>(
+        output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
 export void ispc_raster_rectangle_solid_lerp_color(
@@ -312,7 +335,8 @@ export void ispc_raster_rectangle_solid_lerp_color(
     const uniform int16 top_colors[],
     const uniform int16 bottom_colors[])
 {
-    render_internal<true, false, false, false>(output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors, bottom_colors);
+    render_internal<ColorInterpolationMode_Lerp, ClippingMode_None, TextureUvMode_None>(
+        output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors, bottom_colors);
 }
 
 /*
