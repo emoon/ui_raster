@@ -35,8 +35,8 @@ int16 lerp_16x8(int16 a, int16 b, int16 t) {
 
 struct TileInfo {
     uniform float data[8]; 
-    uniform float width;
-    uniform float height;
+    uniform int width;
+    uniform int height;
 };
 
 static const varying int16 shuffle_alpha = { 3,3,3,8, 7,7,7,8 };
@@ -55,7 +55,7 @@ enum ProcessPixelCount {
 };
 
 template <ProcessPixelCount PixelCount, bool TextureAlignedUVs> 
-    unmasked int process_pixel(int16 color, const uniform int16* texture_ptr, int16 fixed_texture_fraction, int texture_width) 
+    unmasked int process_pixel(int16 color, const int16* uniform texture_ptr, int16 fixed_texture_fraction, int texture_width) 
 {
     varying int16 tex_rgba_rgba_0 = 0;
     varying int16 tex_rgba_rgba_1 = 0;
@@ -140,7 +140,7 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
     int16 xi_start = 0;
     int16 yi_start = 0;
 
-    if (ColorInterpolate || Texture) {
+    if (ColorInterpolate || Texture || TextureAlignedUVs) {
         float x0x0y0y0 = shuffle(x0y0x1y1, shuffle_x0x0y0y0);
         float x1x1y1y1 = shuffle(x0y0x1y1, shuffle_x1x1y1y1);
 
@@ -156,17 +156,13 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
             y0_i = y0_i < 0 ? -y0_i : 0;
             x0_i = x0_i < 0 ? -x0_i : 0;
         }
+            
+        xi_step = (uniform int16)extract(xy_step, 0);
+        yi_step = (uniform int16)extract(xy_step, 1);
 
         if (ColorInterpolate && Clipping) {
-            xi_step = (uniform int16)extract(xy_step, 0);
-            yi_step = (uniform int16)extract(xy_step, 1);
-
             yi_start = yi_step * y0_i;   // adjust yi start based on clipping
             xi_start = xi_step * x0_i;   // adjust xi start based on clipping 
-        }
-
-        if (Texture && Clipping) {
-
         }
 
         // The way we step across x is that we do two pixels at a time. Because of this we need
@@ -179,7 +175,7 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
         xi_step *= 2;
     }
 
-    const uniform int16* texture_ptr = 0;
+    const int16* uniform texture_ptr = 0;
     uniform int texture_width = 0;
 
     if (TextureAlignedUVs || Texture) {
@@ -233,6 +229,7 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
             int16 left_right_colors = lerp_16x8_diff(top_colors, color_top_bottom_diff, yi_start);
             left_colors = shuffle(left_right_colors, shuffle_colors_left);
             right_colors = shuffle(left_right_colors, shuffle_colors_right);
+
             color_diff = right_colors - left_colors;
         }
 
@@ -248,7 +245,7 @@ template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAligne
                 int16 alpha = shuffle(current_color, (uniform int16)0x7fff, shuffle_alpha);
                 current_color = mul_16x8_high(current_color, alpha);
             }
-            
+
             int16 rgba_out = process_pixel<ProcessPixelCount_2, TextureAlignedUVs>(
                 current_color, texture_ptr, fixed_texture_fraction, texture_width);
         
