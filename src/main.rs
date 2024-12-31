@@ -105,7 +105,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X4,
+            scale: Scale::X1,
             ..WindowOptions::default()
         },
     )
@@ -130,15 +130,15 @@ fn main() {
         };
 
         let t0 = color_from_u8(&srgb_to_linear, 0, 0, 0, 255);
-        let t1 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
+        let t1 = color_from_u8(&srgb_to_linear, 128, 255, 0, 255);
         let top_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
-        let t0 = color_from_u8(&srgb_to_linear, 0, 0, 0, 255);
-        let t1 = color_from_u8(&srgb_to_linear, 0, 255, 0, 255);
+        let t0 = color_from_u8(&srgb_to_linear, 128, 0, 0, 255);
+        let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
         let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
         let coords = [
-            10.0, 10.0, 100.0, 100.0,
+            10.0, 10.0, 100.0 * 4.0, 100.0 * 4.0,
             1.0, 1.0, 2.0, 2.0,
         ];
 

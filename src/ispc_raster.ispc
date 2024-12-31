@@ -46,28 +46,91 @@ static const varying int16 shuffle_colors_left = { 0,1,2,3, 0,1,2,3 };
 static const varying int16 shuffle_colors_right = { 4,5,6,7, 4,5,6,7 };
 static const varying int shuffle_x0x0y0y0 = { 0,0,1,1, 0,0,1,1 };
 static const varying int shuffle_x1x1y1y1 = { 2,2,3,3, 2,2,3,3 };
+static const varying int shuffle_mix = { 0, 1, 2, 3, 8, 9, 10, 11 };
+static const varying int shuffle_splat_alpha = { 3, 3, 3, 3, 7, 7, 7, 7 };
 
 enum ProcessPixelCount {
     ProcessPixelCount_1 = 1,
     ProcessPixelCount_2 = 2,
 };
 
-template <ProcessPixelCount PixelCount> unmasked int process_pixel(int16 color) {
+template <ProcessPixelCount PixelCount, bool TextureAlignedUVs> 
+    unmasked int process_pixel(int16 color, const uniform int16* texture_ptr, int16 fixed_texture_fraction, int texture_width) 
+{
+    varying int16 tex_rgba_rgba_0 = 0;
+    varying int16 tex_rgba_rgba_1 = 0;
+    varying int16 texture_fraction = fixed_texture_fraction;
+    varying int16 tex_rgba0 = 0;
+
+    if (TextureAlignedUVs) {
+        // samples two texels from the texture
+        tex_rgba_rgba_0 = texture_ptr[programIndex];
+        tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width];
+    }
+
+    if (TextureAlignedUVs) {
+        varying int16 t0_t1 = lerp_16x8(tex_rgba_rgba_0, tex_rgba_rgba_1, extract(fixed_texture_fraction, 1)); // lerp in y direction
+        varying int16 t = rotate(t0_t1, 4); // rotate so we can lerp in x direction
+        tex_rgba0 = lerp_16x8(t, t, extract(fixed_texture_fraction, 0)); // lerp in x direction
+    } 
+
+    if (PixelCount == ProcessPixelCount_2) {
+        if (TextureAlignedUVs) {
+            // samples two texels from the texture
+            tex_rgba_rgba_0 = texture_ptr[programIndex + 4];
+            tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width + 4];
+        }
+
+        if (TextureAlignedUVs) {
+            varying int16 t0_t1 = lerp_16x8(tex_rgba_rgba_0, tex_rgba_rgba_1, extract(fixed_texture_fraction, 1)); // lerp in y direction
+            varying int16 t = rotate(t0_t1, 4); // rotate so we can lerp in x direction
+            varying int16 tex_rgba1 = lerp_16x8(t, t, extract(fixed_texture_fraction, 0)); // lerp in x direction
+            tex_rgba0 = shuffle(tex_rgba0, tex_rgba1, shuffle_mix);
+        } 
+    }
+
+    if (TextureAlignedUVs) {
+        varying int16 one_minus_alpha = 0x7fff - shuffle(color, color, shuffle_splat_alpha); 
+        color = lerp_16x8(color, tex_rgba0, one_minus_alpha);
+    }
+
     return color;
 }
 
-template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
+template <bool ColorInterpolate, bool Clipping, bool Texture, bool TextureAlignedUVs> unmasked void render_internal(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
+    const uniform int16 texture_data[],
+    const uniform float uv_data[],
+    const uniform int texture_size[],
     const uniform float x0y0x1y1_data[],
     const uniform int16 top_colors_a[],
     const uniform int16 bottom_colors_a[])
 {
     int16 top_colors = top_colors_a[programIndex];
     int16 bottom_colors = bottom_colors_a[programIndex];
+    int16 fixed_texture_fraction = 0;
 
     // adjust for sub-pixel offset
-    float x0y0x1y1 = floor((x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5);
+    float x0y0x1y1_adjust = (x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5;
+    float x0y0x1y1 = floor(x0y0x1y1_adjust);
+    float uv = 0.0;
+
+    if (Texture || TextureAlignedUVs) {
+        uv = uv_data[programIndex];
+        uv *= texture_size[programIndex];
+        float uv_fraction = (x0y0x1y1_adjust - x0y0x1y1);
+
+        if (Texture) {
+            // Adjust UVs for sub-pixel offset based on the fractional part of the quads position
+            uv += uv_fraction; 
+        } else {
+            // If we have aligned UVs (1:1) with the screen pixels we can use the fractional part
+            // part when we sample the texture
+            fixed_texture_fraction = (int16)(uv_fraction * 0x7FFF);
+        }
+    }
+
     float x_min_step = 0.0;
     float y_min_step = 0.0;
 
@@ -77,22 +140,33 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
     int16 xi_start = 0;
     int16 yi_start = 0;
 
-    if (ColorInterpolate) {
+    if (ColorInterpolate || Texture) {
         float x0x0y0y0 = shuffle(x0y0x1y1, shuffle_x0x0y0y0);
         float x1x1y1y1 = shuffle(x0y0x1y1, shuffle_x1x1y1y1);
 
         float xy_diff = x1x1y1y1 - x0x0y0y0;
         float xy_step = 32767.0 / xy_diff;
 
-        xi_step = (uniform int16)extract(xy_step, 0);
-        yi_step = (uniform int16)extract(xy_step, 1);
+        uniform int x0_i = 0; 
+        uniform int y0_i = 0; 
 
         if (Clipping) {
-            uniform int x0_i = extract(x0y0x1y1_int, 0);
-            uniform int y0_i = extract(x0y0x1y1_int, 1);
+            x0_i = extract(x0y0x1y1_int, 0);
+            y0_i = extract(x0y0x1y1_int, 1);
+            y0_i = y0_i < 0 ? -y0_i : 0;
+            x0_i = x0_i < 0 ? -x0_i : 0;
+        }
 
-            yi_start = yi_step * y0_i < 0 ? -y0_i : 0;   // adjust yi start based on clipping
-            xi_start = xi_step * x0_i < 0 ? -x0_i : 0;   // adjust xi start based on clipping 
+        if (ColorInterpolate && Clipping) {
+            xi_step = (uniform int16)extract(xy_step, 0);
+            yi_step = (uniform int16)extract(xy_step, 1);
+
+            yi_start = yi_step * y0_i;   // adjust yi start based on clipping
+            xi_start = xi_step * x0_i;   // adjust xi start based on clipping 
+        }
+
+        if (Texture && Clipping) {
+
         }
 
         // The way we step across x is that we do two pixels at a time. Because of this we need
@@ -105,6 +179,21 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
         xi_step *= 2;
     }
 
+    const uniform int16* texture_ptr = 0;
+    uniform int texture_width = 0;
+
+    if (TextureAlignedUVs || Texture) {
+        texture_width = extract(texture_size[programIndex], 0); 
+        texture_ptr = &texture_data[0];
+
+        if (TextureAlignedUVs) {
+            uniform int u0 = (uniform int)extract(uv, 0);
+            uniform int v0 = (uniform int)extract(uv, 1);
+            uniform int texture_start = ((v0 * texture_width) + u0);
+            texture_ptr += texture_start; 
+        }
+    } 
+ 
     uniform int x0 = extract(x0y0x1y1_int, 0);
     uniform int y0 = extract(x0y0x1y1_int, 1);
     uniform int x1 = extract(x0y0x1y1_int, 2);
@@ -160,10 +249,15 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
                 current_color = mul_16x8_high(current_color, alpha);
             }
             
-            int16 rgba_out = process_pixel<ProcessPixelCount_2>(current_color);
+            int16 rgba_out = process_pixel<ProcessPixelCount_2, TextureAlignedUVs>(
+                current_color, texture_ptr, fixed_texture_fraction, texture_width);
         
             uniform int index = ((y * tile_info->width) + (x << 1)) * 4;
             tile_output[index + programIndex] = rgba_out;
+
+            if (TextureAlignedUVs) {
+                texture_ptr += 2;
+            } 
 
             if (ColorInterpolate) {
                 x_step_current += xi_step; 
@@ -174,7 +268,8 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
         if (xlen & 1) {
             uniform int index = ((y * tile_info->width) + xlen - 1) * 4;
             int16 backbuffer = tile_output[index + programIndex];
-            int16 rgba_out = process_pixel<ProcessPixelCount_1>(current_color);
+            int16 rgba_out = process_pixel<ProcessPixelCount_1, TextureAlignedUVs>(
+                current_color, texture_ptr, fixed_texture_fraction, texture_width);
             // if we have an uneven pixel to write we need to load the current output
             // and mask it with the data we want to write so we only write the first part of it
             tile_output[index + programIndex] = shuffle(rgba_out, backbuffer, shuffle_write_odd);
@@ -183,70 +278,56 @@ template <bool ColorInterpolate, bool Clipping> unmasked void render_internal(
         if (ColorInterpolate) {
             yi_start += yi_step;
         }
+
+        if (TextureAlignedUVs) {
+            texture_ptr += texture_width - xlen;
+        }
     }
+}
+
+export void ispc_raster_fixed_texture_solid(
+    uniform int16 output[],
+    const TileInfo* uniform tile_info,
+    const uniform int16 texture_data[],
+    const uniform float uv_data[],
+    const uniform int texture_size[],
+    const uniform float x0y0x1y1_data[],
+    const uniform int16 top_colors_a[],
+    const uniform int16 bottom_colors_a[])
+{
+    render_internal<false, false, false, true>(output, tile_info, texture_data, uv_data, texture_size, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
 export void ispc_raster_rectangle_solid(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
-    const uniform float x0_data[],
-    const uniform float y0_data[], 
-    const uniform float x1_data[], 
-    const uniform float y1_data[], 
-    uniform int count)
+    const uniform float x0y0x1y1_data[],
+    const uniform int16 top_colors_a[],
+    const uniform int16 bottom_colors_a[])
 {
+    render_internal<false, false, false, false>(output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
 export void ispc_raster_rectangle_solid_lerp_color(
+    uniform int16 output[],
+    const TileInfo* uniform tile_info,
+    const uniform float x0y0x1y1_data[],
+    const uniform int16 top_colors[],
+    const uniform int16 bottom_colors[])
+{
+    render_internal<true, false, false, false>(output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors, bottom_colors);
+}
+
+/*
+export void ispc_raster_rectangle_texture(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
     const uniform float x0y0x1y1[],
     const uniform int16 top_colors[],
     const uniform int16 bottom_colors[])
 {
-    render_internal<true, false>(output, tile_info, x0y0x1y1, top_colors, bottom_colors);
+
+    render_internal<false, false>(output, tile_info, x0y0x1y1, top_colors, bottom_colors);
 }
+*/
 
-export void ispc_raster(
-    uniform int16 output[],
-    const TileInfo* uniform tile_info,
-    const uniform float x0_data[],
-    const uniform float y0_data[], 
-    const uniform float x1_data[], 
-    const uniform float y1_data[], 
-    uniform int count)
-{
-    for (uniform int i = 0; i < count; i += programCount) {
-        // adjust for sub-pixel offset
-        float x0_f = floor((x0_data[i + programIndex] - tile_info->data[0]) + 0.5);
-        float y0_f = floor((y0_data[i + programIndex] - tile_info->data[1]) + 0.5);
-        float x1_f = floor((x1_data[i + programIndex] - tile_info->data[2]) + 0.5);
-        float y1_f = floor((y1_data[i + programIndex] - tile_info->data[3]) + 0.5);
-
-        float clipped_min_x = max(0.0, x0_f);
-        float clipped_min_y = max(0.0, y0_f);
-        float clipped_max_x = min(x1_f, (uniform float)tile_info->width);
-        float clipped_max_y = min(y1_f, (uniform float)tile_info->height);
-
-        uniform int channel_count = min(count - i, programCount);
-
-        for (uniform int t = 0; t < channel_count; ++t) {
-            uniform int x0 = extract((int)x0_f, t);
-            uniform int y0 = extract((int)y0_f, t);
-            uniform int x1 = extract((int)x1_f, t);
-            uniform int y1 = extract((int)y1_f, t);
-
-            uniform int ylen = y1 - y0;
-            uniform int xlen = x1 - x0;
-            uniform int write_start = ((y0 * tile_info->width) + x0) * 4;
-            uniform int16* tile_output = &output[write_start];
-
-            for (uniform int y = 0; y < ylen; ++y) {
-                for (uniform int x = 0; x < xlen; ++x) {
-                    uniform int index = ((y * tile_info->width) + x) * 4;
-                    tile_output[index + programIndex] = 0x5555;
-                }
-            }
-        }
-    }
-}
