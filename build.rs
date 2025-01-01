@@ -8,7 +8,8 @@ fn main() {
     let target_isas = vec![TargetISA::Neoni32x4];
 
     let bindgen_builder = ispc_compile::bindgen::builder()
-        .allowlist_function("ispc_raster_rectangle_solid_lerp_color");
+        .allowlist_function("ispc_raster_rectangle_solid_lerp_color")
+        .allowlist_function("ispc_raster_texture_aligned");
 
     ispc_compile::Config::new()
         .file("src/ispc_raster.ispc")

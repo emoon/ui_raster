@@ -131,10 +131,37 @@ fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i1
     (r, g, b, (a as i16) << 7)
 } 
 
+fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture { 
+    let mut texture = vec![0u16; 512 * 512 * 4];
+
+    for y in 0..512 {
+        let color = if y % 2 == 0 {
+            srgb_to_linear[255]
+        } else {
+            srgb_to_linear[0]
+        };
+
+        for x in 0..512 {
+            let index = (y * 512 + x) * 4;
+            texture[index + 0] = color;
+            texture[index + 1] = color;
+            texture[index + 2] = color;
+            texture[index + 3] = 0;
+        }
+    }
+
+    Texture {
+        data: texture,
+        width: 512,
+        height: 512,
+    }
+}
+
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
-    let _texture = read_texture("assets/uv.png", &srgb_to_linear);
+    let texture = read_texture("assets/uv.png", &srgb_to_linear);
+    //let texture = generate_test_texture(&srgb_to_linear); 
 
     let tile_width = 1280;
     let tile_height = 512;
@@ -145,7 +172,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X4,
             ..WindowOptions::default()
         },
     )
@@ -182,10 +209,36 @@ fn main() {
             1.0, 1.0, 2.0, 2.0,
         ];
 
+        /*
         unsafe {
             ui_raster::ispc_raster_rectangle_solid_lerp_color(
                 output.as_mut_ptr(),
                 &tile_info,
+                coords.as_ptr(),
+                top_colors.as_ptr(),
+                bottom_colors.as_ptr(),
+            );
+        }
+        */
+
+        let uv_coords = [
+            0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ];
+
+        let texture_sizes = [
+            texture.width as i32, texture.height as i32, 
+            texture.width as i32, texture.height as i32, 
+            texture.width as i32, texture.height as i32, 
+            texture.width as i32, texture.height as i32, 
+        ];
+
+        unsafe {
+            ui_raster::ispc_raster_texture_aligned(
+                output.as_mut_ptr(),
+                &tile_info,
+                texture.data.as_ptr() as *const i16,
+                uv_coords.as_ptr(),
+                texture_sizes.as_ptr(),
                 coords.as_ptr(),
                 top_colors.as_ptr(),
                 bottom_colors.as_ptr(),
