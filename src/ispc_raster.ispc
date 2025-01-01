@@ -60,11 +60,6 @@ enum TextureUvMode {
     TextureUvMode_Unaligned = 2,
 };
 
-enum ClippingMode {
-    ClippingMode_None = 0,
-    ClippingMode_Clipping = 1,
-};
-
 enum ColorInterpolationMode {
     ColorInterpolationMode_None = 0,
     ColorInterpolationMode_Solid = 1,
@@ -120,7 +115,6 @@ template <ProcessPixelCount PixelCount, ColorInterpolationMode ColorMode, Textur
 }
 
 template <ColorInterpolationMode ColorMode, 
-          ClippingMode Clipping, 
           TextureUvMode TextureMode> unmasked void render_internal(
     uniform int16 output[],
     const TileInfo* uniform tile_info,
@@ -165,10 +159,7 @@ template <ColorInterpolationMode ColorMode,
     int16 xi_start = 0;
     int16 yi_start = 0;
 
-    if (ColorMode == ColorInterpolationMode_Lerp 
-     || Clipping == ClippingMode_Clipping
-     || TextureMode > TextureUvMode_None) 
-    {
+    if (ColorMode == ColorInterpolationMode_Lerp || TextureMode > TextureUvMode_None) {
         float x0x0y0y0 = shuffle(x0y0x1y1, shuffle_x0x0y0y0);
         float x1x1y1y1 = shuffle(x0y0x1y1, shuffle_x1x1y1y1);
 
@@ -178,17 +169,15 @@ template <ColorInterpolationMode ColorMode,
         uniform int x0_i = 0; 
         uniform int y0_i = 0; 
 
-        if (Clipping) {
-            x0_i = extract(x0y0x1y1_int, 0);
-            y0_i = extract(x0y0x1y1_int, 1);
-            y0_i = y0_i < 0 ? -y0_i : 0;
-            x0_i = x0_i < 0 ? -x0_i : 0;
-        }
+        x0_i = extract(x0y0x1y1_int, 0);
+        y0_i = extract(x0y0x1y1_int, 1);
+        y0_i = y0_i < 0 ? -y0_i : 0;
+        x0_i = x0_i < 0 ? -x0_i : 0;
             
         xi_step = (uniform int16)extract(xy_step, 0);
         yi_step = (uniform int16)extract(xy_step, 1);
 
-        if (ColorMode && Clipping) {
+        if (ColorMode) {
             yi_start = yi_step * y0_i;   // adjust yi start based on clipping
             xi_start = xi_step * x0_i;   // adjust xi start based on clipping 
         }
@@ -223,18 +212,16 @@ template <ColorInterpolationMode ColorMode,
     uniform int x1 = extract(x0y0x1y1_int, 2);
     uniform int y1 = extract(x0y0x1y1_int, 3);
 
-    if (Clipping) {
-        x0 = max((uniform int)0, x0);
-        y0 = max((uniform int)0, y0);
-        x1 = min(x1, (uniform int)tile_info->width);
-        y1 = min(y1, (uniform int)tile_info->height);
-    }
+    x0 = max((uniform int)0, x0);
+    y0 = max((uniform int)0, y0);
+    x1 = min(x1, (uniform int)tile_info->width);
+    y1 = min(y1, (uniform int)tile_info->height);
 
     uniform int ylen = y1 - y0;
     uniform int xlen = x1 - x0;
 
-    assume(ylen > 0);
-    assume(xlen > 0);
+    //assume(ylen > 0);
+    //assume(xlen > 0);
 
     uniform int write_start = ((y0 * tile_info->width) + x0) * 4;
     uniform int16* tile_output = &output[write_start];
@@ -324,7 +311,7 @@ export void ispc_raster_texture_aligned(
     const uniform int16 top_colors_a[],
     const uniform int16 bottom_colors_a[])
 {
-    render_internal<ColorInterpolationMode_None, ClippingMode_None, TextureUvMode_Aligned>(
+    render_internal<ColorInterpolationMode_None, TextureUvMode_Aligned>(
         output, tile_info, texture_data, uv_data, texture_size, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
@@ -335,7 +322,7 @@ export void ispc_raster_rectangle_solid(
     const uniform int16 top_colors_a[],
     const uniform int16 bottom_colors_a[])
 {
-    render_internal<ColorInterpolationMode_None, ClippingMode_None, TextureUvMode_None>(
+    render_internal<ColorInterpolationMode_None, TextureUvMode_None>(
         output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors_a, bottom_colors_a);
 }
 
@@ -346,7 +333,7 @@ export void ispc_raster_rectangle_solid_lerp_color(
     const uniform int16 top_colors[],
     const uniform int16 bottom_colors[])
 {
-    render_internal<ColorInterpolationMode_Lerp, ClippingMode_None, TextureUvMode_None>(
+    render_internal<ColorInterpolationMode_Lerp, TextureUvMode_None>(
         output, tile_info, 0, 0, 0, x0y0x1y1_data, top_colors, bottom_colors);
 }
 
