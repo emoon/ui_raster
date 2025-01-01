@@ -113,6 +113,10 @@ fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
         data.push(temp);
     }
 
+    for i in 0..512 * 4 {
+        data[i] = 0;
+    }
+
     let width = reader.info().width as usize;
     let height = reader.info().height as usize;
 
@@ -135,13 +139,13 @@ fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
     let mut texture = vec![0u16; 512 * 512 * 4];
 
     for y in 0..512 {
-        let color = if y % 2 == 0 {
+        let color = if y % 2 == 1 {
             srgb_to_linear[255]
         } else {
             srgb_to_linear[0]
         };
 
-        for x in 0..512 {
+        for x in 0..256 {
             let index = (y * 512 + x) * 4;
             texture[index + 0] = color;
             texture[index + 1] = color;
@@ -172,7 +176,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X4,
+            scale: Scale::X1,
             ..WindowOptions::default()
         },
     )
@@ -184,6 +188,8 @@ fn main() {
 
     // Limit to max ~60 fps update rate
     window.set_target_fps(60);
+
+    let mut y_pos = 0.0;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in output.iter_mut() {
@@ -205,7 +211,7 @@ fn main() {
         let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
         let coords = [
-            10.0, 10.0, 100.0 * 4.0, 100.0 * 4.0,
+            10.0, 10.0 + y_pos, 100.0 * 4.0, (100.0 * 4.0) + y_pos,
             1.0, 1.0, 2.0, 2.0,
         ];
 
@@ -255,5 +261,7 @@ fn main() {
         );
 
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+
+        y_pos += 0.21;
     }
 }

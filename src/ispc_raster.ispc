@@ -82,10 +82,7 @@ template <ProcessPixelCount PixelCount, ColorInterpolationMode ColorMode, Textur
     if (TextureMode == TextureUvMode_Aligned) {
         // samples two texels from the texture
         tex_rgba_rgba_0 = texture_ptr[programIndex];
-        tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width];
-
-        //print("tex_rgba_rgba_0: %\n", tex_rgba_rgba_0);
-        //print("tex_rgba_rgba_1: %\n", tex_rgba_rgba_1);
+        tex_rgba_rgba_1 = texture_ptr[programIndex + (texture_width * 4)];
     }
 
     if (TextureMode == TextureUvMode_Aligned) {
@@ -98,7 +95,7 @@ template <ProcessPixelCount PixelCount, ColorInterpolationMode ColorMode, Textur
         if (TextureMode == TextureUvMode_Aligned) {
             // samples two texels from the texture
             tex_rgba_rgba_0 = texture_ptr[programIndex + 4];
-            tex_rgba_rgba_1 = texture_ptr[programIndex + texture_width + 4];
+            tex_rgba_rgba_1 = texture_ptr[programIndex + (texture_width * 4) + 4];
         }
 
         if (TextureMode == TextureUvMode_Aligned) {
@@ -139,7 +136,8 @@ template <ColorInterpolationMode ColorMode,
     int16 fixed_texture_fraction = 0;
 
     // adjust for sub-pixel offset
-    float x0y0x1y1_adjust = (x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5;
+    //float x0y0x1y1_adjust = (x0y0x1y1_data[programIndex] - tile_info->data[programIndex]) + 0.5;
+    float x0y0x1y1_adjust = (x0y0x1y1_data[programIndex] - tile_info->data[programIndex]);
     float x0y0x1y1 = floor(x0y0x1y1_adjust);
     float uv = 0.0;
 
@@ -154,11 +152,9 @@ template <ColorInterpolationMode ColorMode,
         } else {
             // If we have aligned UVs (1:1) with the screen pixels we can use the fractional part
             // part when we sample the texture
-            fixed_texture_fraction = (int16)(uv_fraction * 0x7FFF);
+            fixed_texture_fraction = 0x7fff - (int16)(uv_fraction * 0x7FFF);
         }
     }
-    
-    fixed_texture_fraction = 0;
 
     float x_min_step = 0.0;
     float y_min_step = 0.0;
