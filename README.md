@@ -12,23 +12,23 @@ The plan is to first implement an ISPC version, followed by an intrinsic version
 
 ### 2. Text and Image Rendering
 - [ ] Draw text.
-- [ ] Draw images.
+- [x] Draw images.
 
 ### 3. Styling and Effects
 - [ ] Draw borders.
-- [ ] Support clipping for contained drawing.
+- [x] Support clipping for contained drawing.
 
 ### 4. Rendering Features
 - [x] Support vertex color interpolation across rectangles.
-- [ ] Implement pre-multiplied alpha blending.
-- [ ] Enable full subpixel rendering.
+- [x] Implement pre-multiplied alpha blending.
+- [x] Enable full subpixel rendering.
 - [x] Render in linear color space using 16-bit components per channel.
 
 ### 5. Texture Sampling
-- [ ] Sample textures with bilinear filtering.
+- [x] Sample textures with bilinear filtering.
 
 ### 6. Code Structure
-- [ ] Create code permutations to optimize based on rendering primitives.
+- [x] Create code permutations to optimize based on rendering primitives.
 
 ## Intrinsic Implementation status
 
@@ -55,5 +55,3 @@ The plan is to first implement an ISPC version, followed by an intrinsic version
 
 ### 6. Code Structure
 - [ ] Create code permutations to optimize based on rendering primitives.
-
-

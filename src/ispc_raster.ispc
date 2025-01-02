@@ -67,7 +67,7 @@ enum ColorInterpolationMode {
 };
 
 template <ProcessPixelCount PixelCount, ColorInterpolationMode ColorMode, TextureUvMode TextureMode> 
-    unmasked int process_pixel(int16 color, const int16* uniform texture_ptr, int16 fixed_texture_fraction, int texture_width) 
+    unmasked int process_pixel(int16 color, const int16* uniform texture_ptr, int16 fixed_texture_fraction, uniform int texture_width) 
 {
     varying int16 tex_rgba_rgba_0 = 0;
     varying int16 tex_rgba_rgba_1 = 0;
