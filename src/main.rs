@@ -5,6 +5,9 @@ use std::fs::File;
 
 ispc_module!(ui_raster);
 
+mod simd;
+mod raster;
+
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
 
