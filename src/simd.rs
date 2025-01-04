@@ -342,27 +342,27 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "aarch64")]
-    pub fn splat_1111_1111(self) -> Self {
-        self.splat::<1>()
+    pub fn splat_0000_0000(self) -> Self {
+        self.splat::<0>()
     }
 
     #[cfg(target_arch = "aarch64")]
-    pub fn splat_3333_3333(self) -> Self {
-        self.splat::<3>()
+    pub fn splat_2222_2222(self) -> Self {
+        self.splat::<2>()
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn splat_1111_1111<>(self) -> Self {
+    pub fn splat_0000_0000<>(self) -> Self {
         unsafe {
-            let lower = _mm_shufflelo_epi16(self.v, 0b01_01_01_01); 
+            let lower = _mm_shufflelo_epi16(self.v, 0b00_00_00_00); 
             Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
         }
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn splat_3333_3333<>(self) -> Self {
+    pub fn splat_2222_2222<>(self) -> Self {
         unsafe {
-            let lower = _mm_shufflelo_epi16(self.v, 0b11_11_11_11); 
+            let lower = _mm_shufflelo_epi16(self.v, 0b10_10_10_10); 
             Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
         }
     }
@@ -391,7 +391,7 @@ impl i16x8 {
     #[cfg(target_arch = "x86_64")]
     pub fn merge(v0: Self, v1: Self) -> Self {
         Self {
-            v: unsafe { _mm_unpacklo_epi16(v0.v, v1.v) },
+            v: unsafe { _mm_castps_si128(_mm_movelh_ps(_mm_castsi128_ps(v0.v), _mm_castsi128_ps(v1.v))) }, 
         }
     }
 
@@ -1094,19 +1094,28 @@ mod f16x8_tests {
     }
 
     #[test]
-    fn test_i16x_splat_1() {
+    fn test_i16x_splat_0() {
         // Test splatting a specific lane of an i16x8 register
         let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
-        let result = vec.splat_1111_1111().to_array();
-        assert_eq!(result, [2, 2, 2, 2, 2, 2, 2, 2]);
+        let result = vec.splat_0000_0000().to_array();
+        assert_eq!(result, [1, 1, 1, 1, 1, 1, 1, 1]);
     }
 
     #[test]
-    fn test_i16x_splat_3() {
+    fn test_i16x_splat_2() {
         // Test splatting a specific lane of an i16x8 register
         let vec = i16x8::load_unaligned(&[1, 2, 3, 4, 5, 6, 7, 8]);
-        let result = vec.splat_3333_3333().to_array();
-        assert_eq!(result, [4, 4, 4, 4, 4, 4, 4, 4]);
+        let result = vec.splat_2222_2222().to_array();
+        assert_eq!(result, [3, 3, 3, 3, 3, 3, 3, 3]);
+    }
+
+    #[test]
+    fn test_i16x8_merge() {
+        // Test merging two i16x8 registers
+        let v0 = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let v1 = i16x8::new(9, 10, 11, 12, 13, 14, 15, 16);
+        let result = i16x8::merge(v0, v1).to_array();
+        assert_eq!(result, [1, 2, 3, 4, 9, 10, 11, 12]);
     }
 }
 

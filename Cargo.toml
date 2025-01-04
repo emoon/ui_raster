@@ -9,5 +9,5 @@ edition = "2021"
 
 [dependencies]
 png = "0.17"
-# minifb = "0.27"
+minifb = "0.27"
 # ispc_rt = "2"

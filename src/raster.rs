@@ -27,6 +27,7 @@ impl Raster {
             let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add(texture_width * 4) });
             let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, fixed_v_fraction);
             //let t = t0_t1.rotate_4();
+            //tex_rgba0 = i16x8::lerp(t0_t1, t0_t1, fixed_u_fraction);
             tex_rgba0 = i16x8::lerp(t0_t1, t0_t1, fixed_u_fraction);
         }
 
@@ -62,7 +63,6 @@ impl Raster {
         let mut fixed_v_fraction = i16x8::new_splat(0);
         let mut texture_ptr = texture_data;//.as_ptr();
         let mut texture_width = 0;
-        //
 
         if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
             let texture_sizes = i32x4::load_unaligned(texture_sizes);
@@ -72,15 +72,15 @@ impl Raster {
             let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1) * f32x4::new_splat(0x7fff as f32);
             let uv_fraction = i16x8::new_splat(0x7fff) - uv_fraction.as_i32x4().as_i16x8();
 
-            fixed_u_fraction = uv_fraction.splat_1111_1111();
-            fixed_v_fraction = uv_fraction.splat_3333_3333();
-            
+            fixed_u_fraction = uv_fraction.splat_0000_0000();
+            fixed_v_fraction = uv_fraction.splat_2222_2222();
+
             texture_width = texture_sizes.extract::<0>() as usize;
 
             let u = uv_i.extract::<0>() as usize; 
             let v = uv_i.extract::<1>() as usize;
 
-            unsafe { texture_ptr = texture_ptr.add((v * texture_width + u) * 4) };
+            texture_ptr = unsafe { texture_ptr.add((v * texture_width + u) * 4) };
         }
 
         let x0 = x0y0x1y1_int.extract::<0>();
@@ -90,12 +90,14 @@ impl Raster {
 
         let ylen = y1 - y0;
         let xlen = x1 - x0;
-
+        
+        let tile_width = tile_info.width as usize;
         let current_color = i16x8::new_splat(0);
+        let output = &mut output[((y0 as usize * tile_width + x0 as usize) * 4)..];
         let mut output_ptr = output.as_mut_ptr();
 
         for _y in 0..ylen {
-            for _x in (0..xlen).step_by(2) {
+            for _x in (0..(xlen >> 1)) {
                 let color = Self::process_pixel::<PIXEL_COUNT_2, TEXTURE_MODE>(
                     current_color,
                     texture_ptr,
@@ -110,8 +112,8 @@ impl Raster {
             }
 
             if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                texture_ptr = unsafe { texture_ptr.add((texture_width - xlen as usize) * 8) };
-                output_ptr = unsafe { output_ptr.add(512) };
+                texture_ptr = unsafe { texture_ptr.add((texture_width - xlen as usize) * 4) };
+                output_ptr = unsafe { output_ptr.add((tile_width - xlen as usize) * 4) };
             }
         }
     }
