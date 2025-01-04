@@ -35,7 +35,7 @@ fn srgb_to_linear(x: f32) -> f32 {
 fn build_srgb_to_linear_table() -> [u16; 1 << 8] {
     let mut table = [0; 1 << 8];
 
-    for (i, entry) in table.iter_mut().enumerate().take((1 << 8)) {
+    for (i, entry) in table.iter_mut().enumerate().take(1 << 8) {
         let srgb = i as f32 / 255.0;
         let linear = srgb_to_linear(srgb);
         *entry = (linear * ((1 << LINEAR_BIT_COUNT) - 1) as f32) as u16;
@@ -48,7 +48,7 @@ fn build_srgb_to_linear_table() -> [u16; 1 << 8] {
 fn build_linear_to_srgb_table() -> [u8; 1 << SRGB_BIT_COUNT] {
     let mut table = [0; 1 << SRGB_BIT_COUNT];
 
-    for (i, entry) in table.iter_mut().enumerate().take((1 << SRGB_BIT_COUNT)) {
+    for (i, entry) in table.iter_mut().enumerate().take(1 << SRGB_BIT_COUNT) {
         let linear = i as f32 / ((1 << SRGB_BIT_COUNT) - 1) as f32;
         let srgb = linear_to_srgb(linear);
         *entry = (srgb * (1 << 8) as f32) as u8;
@@ -116,8 +116,17 @@ fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
         data.push(temp);
     }
 
-    for entry in data.iter_mut().take(512 * 4) {
-        *entry = 0;
+    // clear the border colors for proper texture sampling
+    for y in 0..512 {
+        for x in 0..512 {
+            let index = (y * 512 + x) * 4;
+            if y == 0 || y == 511 || x == 0 || x == 511 {
+                data[index + 0] = 0;
+                data[index + 1] = 0;
+                data[index + 2] = 0;
+                data[index + 3] = 0;
+            }
+        }
     }
 
     let width = reader.info().width as usize;
@@ -181,7 +190,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X4,
+            scale: Scale::X1,
             ..WindowOptions::default()
         },
     )
@@ -267,13 +276,23 @@ fn main() {
         }
         */
 
+        /*
         raster::Raster::render_aligned_texture(
             &mut output,
-            texture.data.as_ptr() as *const i16,
             &tile_info_2,
+            &coords,
+            texture.data.as_ptr() as *const i16,
             &uv_coords,
             &texture_sizes,
+        );
+        */
+
+        raster::Raster::render_solid_lerp(
+            &mut output,
+            &tile_info_2,
             &coords,
+            crate::simd::i16x8::load_unaligned(&top_colors),
+            crate::simd::i16x8::load_unaligned(&bottom_colors),
         );
 
         copy_tile_to_output_buffer(
@@ -287,7 +306,7 @@ fn main() {
 
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
 
-        // y_pos += 0.21;
-        x_pos += 0.21;
+        //y_pos += 0.21;
+        //x_pos += 0.21;
     }
 }
