@@ -1,15 +1,6 @@
 use crate::simd::*;
 
-pub struct Raster {
-
-
-}
-
-enum ColorInterpolation {
-    None,
-    Solid,
-    Linear,
-}
+pub struct Raster;
 
 pub struct TileInfo {
     pub offsets: f32x4,
@@ -71,6 +62,7 @@ impl Raster {
         let mut fixed_v_fraction = i16x8::new_splat(0);
         let mut texture_ptr = texture_data;//.as_ptr();
         let mut texture_width = 0;
+        //
 
         if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
             let texture_sizes = i32x4::load_unaligned(texture_sizes);
@@ -91,10 +83,10 @@ impl Raster {
             unsafe { texture_ptr = texture_ptr.add((v * texture_width + u) * 4) };
         }
 
-        let x0 = x0y0x1y1_int.extract::<0>() as i32;
-        let y0 = x0y0x1y1_int.extract::<1>() as i32;
-        let x1 = x0y0x1y1_int.extract::<2>() as i32;
-        let y1 = x0y0x1y1_int.extract::<3>() as i32;
+        let x0 = x0y0x1y1_int.extract::<0>();
+        let y0 = x0y0x1y1_int.extract::<1>();
+        let x1 = x0y0x1y1_int.extract::<2>();
+        let y1 = x0y0x1y1_int.extract::<3>();
 
         let ylen = y1 - y0;
         let xlen = x1 - x0;
@@ -102,8 +94,8 @@ impl Raster {
         let current_color = i16x8::new_splat(0);
         let mut output_ptr = output.as_mut_ptr();
 
-        for y in 0..ylen {
-            for x in (0..xlen).step_by(2) {
+        for _y in 0..ylen {
+            for _x in (0..xlen).step_by(2) {
                 let color = Self::process_pixel::<PIXEL_COUNT_2, TEXTURE_MODE>(
                     current_color,
                     texture_ptr,
@@ -113,14 +105,14 @@ impl Raster {
                 );
 
                 color.store_unaligned_ptr(output_ptr);
-                unsafe { texture_ptr = texture_ptr.add(8) };
-                unsafe { output_ptr = output_ptr.add(8) };
+                texture_ptr = unsafe { texture_ptr.add(8) };
+                output_ptr = unsafe { output_ptr.add(8) };
             }
-        }
 
-        if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-            unsafe { texture_ptr = texture_ptr.add((texture_width - xlen as usize) * 8) };
-            unsafe { output_ptr = output_ptr.add(512) };
+            if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
+                texture_ptr = unsafe { texture_ptr.add((texture_width - xlen as usize) * 8) };
+                output_ptr = unsafe { output_ptr.add(512) };
+            }
         }
     }
 

@@ -7,7 +7,7 @@ use std::arch::asm;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use core::ops::{Add, AddAssign, BitAnd, BitOr, Mul, Sub, Shr};
+use core::ops::{Add, AddAssign, Mul, Sub};
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -217,6 +217,7 @@ impl f32x4 {
 
 impl i16x8 {
     #[cfg(target_arch = "aarch64")]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(a: i16, b: i16, c: i16, d: i16, e: i16, f: i16, g: i16, h: i16) -> Self {
         let temp = [a, b, c, d, e, f, g, h];
         Self {
@@ -225,6 +226,7 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "x86_64")]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(a: i16, b: i16, c: i16, d: i16, e: i16, f: i16, g: i16, h: i16) -> Self {
         Self {
             v: unsafe { _mm_set_epi16(h, g, f, e, d, c, b, a) },
@@ -541,6 +543,11 @@ impl i32x4 {
         i16x8 { v: unsafe { vreinterpretq_s16_s32(self.v) } }
     }
 
+    #[cfg(target_arch = "x86_64")]
+    pub fn as_i16x8(self) -> i16x8 {
+        i16x8 { v: self.v }
+    }
+
     #[cfg(target_arch = "aarch64")]
     pub fn as_f32x4(self) -> f32x4 {
         f32x4 {
@@ -579,6 +586,7 @@ impl i32x4 {
 
 impl f16x8 {
     #[cfg(target_arch = "aarch64")]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(a: f32, b: f32, c: f32, d: f32, e: f32, f: f32, g: f32, h: f32) -> Self {
         let result: int16x8_t;
         unsafe {
@@ -603,6 +611,7 @@ impl f16x8 {
     }
 
     #[cfg(target_arch = "x86_64")]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(a: f32, b: f32, c: f32, d: f32, e: f32, f: f32, g: f32, h: f32) -> Self {
         Self {
             v0: f32x4::new(a, b, c, d),
@@ -1095,7 +1104,7 @@ mod f16x8_tests {
     #[test]
     fn test_i16x_splat_3() {
         // Test splatting a specific lane of an i16x8 register
-        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let vec = i16x8::load_unaligned(&[1, 2, 3, 4, 5, 6, 7, 8]);
         let result = vec.splat_3333_3333().to_array();
         assert_eq!(result, [4, 4, 4, 4, 4, 4, 4, 4]);
     }

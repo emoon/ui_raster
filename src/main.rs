@@ -35,10 +35,10 @@ fn srgb_to_linear(x: f32) -> f32 {
 fn build_srgb_to_linear_table() -> [u16; 1 << 8] {
     let mut table = [0; 1 << 8];
 
-    for i in 0..(1 << 8) {
+    for (i, entry) in table.iter_mut().enumerate().take((1 << 8)) {
         let srgb = i as f32 / 255.0;
         let linear = srgb_to_linear(srgb);
-        table[i] = (linear * ((1 << LINEAR_BIT_COUNT) - 1) as f32) as u16;
+        *entry = (linear * ((1 << LINEAR_BIT_COUNT) - 1) as f32) as u16;
     }
 
     table
@@ -48,10 +48,10 @@ fn build_srgb_to_linear_table() -> [u16; 1 << 8] {
 fn build_linear_to_srgb_table() -> [u8; 1 << SRGB_BIT_COUNT] {
     let mut table = [0; 1 << SRGB_BIT_COUNT];
 
-    for i in 0..(1 << SRGB_BIT_COUNT) {
+    for (i, entry) in table.iter_mut().enumerate().take((1 << SRGB_BIT_COUNT)) {
         let linear = i as f32 / ((1 << SRGB_BIT_COUNT) - 1) as f32;
         let srgb = linear_to_srgb(linear);
-        table[i] = (srgb * (1 << 8) as f32) as u8;
+        *entry = (srgb * (1 << 8) as f32) as u8;
     }
 
     table
@@ -72,7 +72,7 @@ fn copy_tile_to_output_buffer(
         for x in 0..tile_width {
             let tile_index = (y * tile_width) + x;
             let output_index = (y * width) + x;
-            let r = tile[(tile_index * 4) + 0];
+            let r = tile[tile_index * 4];
             let g = tile[(tile_index * 4) + 1];
             let b = tile[(tile_index * 4) + 2];
 
@@ -116,8 +116,8 @@ fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
         data.push(temp);
     }
 
-    for i in 0..512 * 4 {
-        data[i] = 0;
+    for entry in data.iter_mut().take(512 * 4) {
+        *entry = 0;
     }
 
     let width = reader.info().width as usize;
@@ -138,6 +138,7 @@ fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i1
     (r, g, b, (a as i16) << 7)
 } 
 
+/*
 fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture { 
     let mut texture = vec![0u16; 512 * 512 * 4];
 
@@ -163,6 +164,7 @@ fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
         height: 512,
     }
 }
+*/
 
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
