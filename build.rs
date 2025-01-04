@@ -1,4 +1,5 @@
 fn main() {
+    /*
     use ispc_compile::TargetISA;
 
     #[cfg(target_arch = "x86_64")]
@@ -17,4 +18,5 @@ fn main() {
         .enable_llvm_intrinsics()
         .bindgen_builder(bindgen_builder)
         .compile("ui_raster");
+    */
 }

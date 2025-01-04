@@ -288,9 +288,23 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "aarch64")]
+    pub fn load_unaligned_ptr(data: *const i16) -> Self {
+        Self {
+            v: unsafe { vld1q_s16(data) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn load_unaligned_ptr(data: *const i16) -> Self {
+        Self {
+            v: unsafe { _mm_loadu_si128(data as *const __m128i) },
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
     pub fn lerp_step(start: Self, delta: Self, t: i16x8) -> Self {
         Self {
-            v: unsafe { vaddq_s16(start.v, vqrdmulhq_s16(delta.v, t.v)) },
+            v: unsafe { vqrdmlahq_s16(start.v, delta.v, t.v) },
         }
     }
 
@@ -305,7 +319,7 @@ impl i16x8 {
     pub fn lerp(start: Self, end: Self, t: i16x8) -> Self {
         let delta = unsafe { vsubq_s16(end.v, start.v) };
         Self {
-            v: unsafe { vaddq_s16(start.v, vqrdmulhq_s16(delta, t.v)) },
+            v: unsafe { vqrdmlahq_s16(start.v, delta, t.v) },
         }
     }
 
@@ -331,12 +345,8 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "aarch64")]
-    pub fn splat_1111_1111(self) -> Self {
+    pub fn splat_3333_3333(self) -> Self {
         self.splat::<3>()
-    }
-
-    fn double<const N: i32>() {
-        println!("doubled: {}", N * 2);
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -352,6 +362,34 @@ impl i16x8 {
         unsafe {
             let lower = _mm_shufflelo_epi16(self.v, 0b11_11_11_11); 
             Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn rotate_4(self) -> Self {
+        Self {
+            v: unsafe { vextq_s16(self.v, self.v, 4) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn rotate_4(self) -> Self {
+        Self {
+            v: unsafe { _mm_shuffle_epi32(self.v, 0b11_10_01_00) },
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn merge(v0: Self, v1: Self) -> Self {
+        Self {
+            v: unsafe { vcombine_s16(vget_low_s16(v0.v), vget_low_s16(v1.v)) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn merge(v0: Self, v1: Self) -> Self {
+        Self {
+            v: unsafe { _mm_unpacklo_epi16(v0.v, v1.v) },
         }
     }
 
@@ -498,8 +536,9 @@ impl i32x4 {
         unsafe { _mm_extract_epi32(self.v, LANE) }
     }
 
+    #[cfg(target_arch = "aarch64")]
     pub fn as_i16x8(self) -> i16x8 {
-        i16x8 { v: self.v }
+        i16x8 { v: unsafe { vreinterpretq_s16_s32(self.v) } }
     }
 
     #[cfg(target_arch = "aarch64")]
