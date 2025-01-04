@@ -377,7 +377,7 @@ impl i16x8 {
     #[cfg(target_arch = "x86_64")]
     pub fn rotate_4(self) -> Self {
         Self {
-            v: unsafe { _mm_shuffle_epi32(self.v, 0b11_10_01_00) },
+            v: unsafe { _mm_shuffle_epi32(self.v, 0b01_00_11_10) },
         }
     }
 
@@ -1116,6 +1116,14 @@ mod f16x8_tests {
         let v1 = i16x8::new(9, 10, 11, 12, 13, 14, 15, 16);
         let result = i16x8::merge(v0, v1).to_array();
         assert_eq!(result, [1, 2, 3, 4, 9, 10, 11, 12]);
+    }
+
+    #[test]
+    fn test_i16x8_rotate_4() {
+        // Test rotating an i16x8 register by 4 lanes
+        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let result = vec.rotate_4().to_array();
+        assert_eq!(result, [5, 6, 7, 8, 1, 2, 3, 4]);
     }
 }
 

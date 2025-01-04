@@ -26,9 +26,8 @@ impl Raster {
             let rgba_rgba_0 = i16x8::load_unaligned_ptr(texture);
             let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add(texture_width * 4) });
             let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, fixed_v_fraction);
-            //let t = t0_t1.rotate_4();
-            //tex_rgba0 = i16x8::lerp(t0_t1, t0_t1, fixed_u_fraction);
-            tex_rgba0 = i16x8::lerp(t0_t1, t0_t1, fixed_u_fraction);
+            let t = t0_t1.rotate_4();
+            tex_rgba0 = i16x8::lerp(t0_t1, t, fixed_u_fraction);
         }
 
         if COUNT == 2 {
@@ -36,8 +35,8 @@ impl Raster {
                 let rgba_rgba_0 = i16x8::load_unaligned_ptr(unsafe { texture.add(4) });
                 let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add((texture_width * 4) + 4)});
                 let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, fixed_v_fraction);
-                //let t = t0_t1.rotate_4();
-                let rgba = i16x8::lerp(t0_t1, t0_t1, fixed_u_fraction);
+                let t = t0_t1.rotate_4();
+                let rgba = i16x8::lerp(t0_t1, t, fixed_u_fraction);
                 color = i16x8::merge(tex_rgba0, rgba);
             }
         } else {

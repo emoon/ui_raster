@@ -181,7 +181,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X4,
             ..WindowOptions::default()
         },
     )
@@ -195,6 +195,7 @@ fn main() {
     window.set_target_fps(60);
 
     let mut y_pos = 0.0;
+    let mut x_pos = 0.0;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in output.iter_mut() {
@@ -224,7 +225,7 @@ fn main() {
         let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
         let coords = [
-            10.0, 10.0 + y_pos, 100.0 * 4.0, (100.0 * 4.0) + y_pos,
+            10.0 + x_pos, 10.0 + y_pos, (100.0 * 4.0) + x_pos, (100.0 * 4.0) + y_pos,
             1.0, 1.0, 2.0, 2.0,
         ];
 
@@ -286,6 +287,7 @@ fn main() {
 
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
 
-        y_pos += 0.21;
+        // y_pos += 0.21;
+        x_pos += 0.21;
     }
 }
