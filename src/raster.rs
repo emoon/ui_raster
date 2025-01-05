@@ -10,42 +10,105 @@ pub struct TileInfo {
 
 const TEXTURE_MODE_NONE: usize = 0;
 const TEXTURE_MODE_ALIGNED: usize = 1;
+const PIXEL_COUNT_1: usize = 1;
 const PIXEL_COUNT_2: usize = 2;
+const PIXEL_COUNT_3: usize = 3;
+const PIXEL_COUNT_4: usize = 4;
 
 const COLOR_MODE_NONE: usize = 0;
 const COLOR_MODE_SOLID: usize = 1;
 const COLOR_MODE_LERP: usize = 2;
 
 impl Raster {
-    fn process_pixel<const COUNT: usize, const TEXTURE_MODE: usize>(
+    #[inline(always)]
+    fn sample_aligned_texture(
+        texture: *const i16,
+        texture_width: usize,
+        u_fraction: i16x8,
+        v_fraction: i16x8,
+        offset: usize) -> i16x8
+    {
+        let rgba_rgba_0 = i16x8::load_unaligned_ptr(unsafe { texture.add(offset) });
+        let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add((texture_width * 4) + offset) });
+        let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, v_fraction);
+        let t = t0_t1.rotate_4();
+        i16x8::lerp(t0_t1, t, u_fraction)
+    }
+
+    #[inline(always)]
+    fn interpolate_color(
+        left_colors: i16x8,
+        color_diff: i16x8,
+        step: i16x8) -> i16x8
+    {
+        let color = i16x8::lerp_diff(left_colors, color_diff, step);
+        // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
+        // This will generate a value that looks like:
+        // A0 A0 A0 0x7fff A1 A1 A1 0x7fff 
+        // so the alpha value will stay the same while the color is changed
+        let alpha = color.shuffle_333_0x7fff_777_0x7fff();
+        i16x8::mul_high(color, alpha)
+    }
+
+    #[inline(always)]
+    fn process_pixels<const COUNT: usize, const COLOR_MODE: usize, const TEXTURE_MODE: usize>(
         mut color: i16x8,
         texture: *const i16,
         texture_width: usize,
         fixed_u_fraction: i16x8, 
-        fixed_v_fraction: i16x8) -> i16x8
+        fixed_v_fraction: i16x8,
+        color_diff: i16x8,
+        left_colors: i16x8,
+        x_step_current: i16x8,
+        xi_step: i16x8) -> (i16x8, i16x8)
     {
-        let mut tex_rgba0 = i16x8::new_splat(0);
+        let mut color_0 = i16x8::new_splat(0);
+        let mut color_1 = i16x8::new_splat(0);
 
-        if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-            let rgba_rgba_0 = i16x8::load_unaligned_ptr(texture);
-            let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add(texture_width * 4) });
-            let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, fixed_v_fraction);
-            let t = t0_t1.rotate_4();
-            tex_rgba0 = i16x8::lerp(t0_t1, t, fixed_u_fraction);
+        if COUNT == PIXEL_COUNT_4 {
+            if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
+                let t0 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 0);
+                let t1 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 4);
+                let t2 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 8);
+                let t3 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 12);
 
-            if COUNT == 2 {
-                let rgba_rgba_0 = i16x8::load_unaligned_ptr(unsafe { texture.add(4) });
-                let rgba_rgba_1 = i16x8::load_unaligned_ptr(unsafe { texture.add((texture_width * 4) + 4)});
-                let t0_t1 = i16x8::lerp(rgba_rgba_0, rgba_rgba_1, fixed_v_fraction);
-                let t = t0_t1.rotate_4();
-                let rgba = i16x8::lerp(t0_t1, t, fixed_u_fraction);
-                color = i16x8::merge(tex_rgba0, rgba);
-            } else {
-                color = tex_rgba0;
+                color_0 = i16x8::merge(t0, t1);
+                color_1 = i16x8::merge(t2, t3);
+            }
+
+            if COLOR_MODE == COLOR_MODE_LERP {
+                color_0 = Self::interpolate_color(left_colors, color_diff, x_step_current);
+                color_1 = Self::interpolate_color(left_colors, color_diff, x_step_current + xi_step);
+            }
+
+        } else if COUNT == PIXEL_COUNT_3 {
+            if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
+                let t0 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 0);
+                let t1 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 4);
+                let t2 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 8);
+
+                color_0 = i16x8::merge(t0, t1);
+                color_1 = t2;
+            }
+
+            if COLOR_MODE == COLOR_MODE_LERP {
+                color_0 = Self::interpolate_color(left_colors, color_diff, x_step_current);
+                color_1 = Self::interpolate_color(left_colors, color_diff, x_step_current + xi_step);
+            }
+
+        } else if COUNT == PIXEL_COUNT_2 {
+            if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
+                let t0 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 0);
+                let t1 = Self::sample_aligned_texture(texture, texture_width, fixed_u_fraction, fixed_v_fraction, 4);
+                color_0 = i16x8::merge(t0, t1);
+            }
+
+            if COLOR_MODE == COLOR_MODE_LERP {
+                color_1 = Self::interpolate_color(left_colors, color_diff, x_step_current + xi_step);
             }
         }
 
-        color
+        (color_0, color_1) 
     }
 
 
@@ -145,6 +208,9 @@ impl Raster {
             color_top_bottom_diff = bottom_colors - top_colors;
         }
 
+        let mut tile_line_ptr = output_ptr;
+        let mut texture_line_ptr = texture_ptr;
+
         for _y in 0..ylen {
             if COLOR_MODE == COLOR_MODE_LERP {
                 let left_right_colors = i16x8::lerp_diff(top_colors, color_top_bottom_diff, yi_start);
@@ -155,58 +221,87 @@ impl Raster {
 
             x_step_current = xi_start;
 
-            for _x in 0..(xlen >> 1) {
-                if COLOR_MODE == COLOR_MODE_LERP {
-                    current_color = i16x8::lerp_diff(left_colors, color_diff, x_step_current);
-                    // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
-                    // This will generate a value that looks like:
-                    // A0 A0 A0 0x7fff A1 A1 A1 0x7fff 
-                    // so the alpha value will stay the same while the color is changed
-                    let alpha = current_color.shuffle_333_0x7fff_777_0x7fff();
-                    current_color = i16x8::mul_high(current_color, alpha);
-                }
-
-                let color = Self::process_pixel::<PIXEL_COUNT_2, TEXTURE_MODE>(
+            for _x in 0..(xlen >> 2) {
+                let (c0, c1) = Self::process_pixels::<PIXEL_COUNT_4, COLOR_MODE, TEXTURE_MODE>(
                     current_color,
                     texture_ptr,
                     texture_width,
                     fixed_u_fraction,
                     fixed_v_fraction,
+                    color_diff,
+                    left_colors,
+                    x_step_current,
+                    xi_step
                 );
 
-                color.store_unaligned_ptr(output_ptr);
-                output_ptr = unsafe { output_ptr.add(8) };
+                c0.store_unaligned_ptr(output_ptr);
+                c1.store_unaligned_ptr(unsafe { output_ptr.add(8) });
+
+                output_ptr = unsafe { output_ptr.add(16) };
 
                 if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                    texture_ptr = unsafe { texture_ptr.add(8) };
+                    texture_ptr = unsafe { texture_ptr.add(16) };
                 }
 
                 if COLOR_MODE == COLOR_MODE_LERP {
-                    x_step_current += xi_step;
+                    x_step_current += xi_step * i16x8::new_splat(2);
                 }
             }
 
-            if xlen & 1 != 0 {
-                let color = Self::process_pixel::<1, TEXTURE_MODE>(
+            let xlen_rest = xlen & 3;
+
+            if xlen_rest == 1 {
+                let (c0, c1) = Self::process_pixels::<PIXEL_COUNT_3, COLOR_MODE, TEXTURE_MODE>(
                     current_color,
                     texture_ptr,
                     texture_width,
                     fixed_u_fraction,
                     fixed_v_fraction,
+                    color_diff,
+                    left_colors,
+                    x_step_current,
+                    xi_step
                 );
 
-                color.store_unaligned_ptr(output_ptr);
-                output_ptr = unsafe { output_ptr.add(4) };
+                // TODO: Merge with output
+                c0.store_unaligned_ptr(output_ptr);
+                c1.store_unaligned_ptr(unsafe { output_ptr.add(8) });
+            } else if xlen_rest == 2 {
+                let (c0, _) = Self::process_pixels::<PIXEL_COUNT_2, COLOR_MODE, TEXTURE_MODE>(
+                    current_color,
+                    texture_ptr,
+                    texture_width,
+                    fixed_u_fraction,
+                    fixed_v_fraction,
+                    color_diff,
+                    left_colors,
+                    x_step_current,
+                    xi_step
+                );
 
-                if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                    texture_ptr = unsafe { texture_ptr.add(4) };
-                }
+                c0.store_unaligned_ptr(output_ptr);
+            } else if xlen & 3 == 3 {
+                let (c0, _) = Self::process_pixels::<PIXEL_COUNT_1, COLOR_MODE, TEXTURE_MODE>(
+                    current_color,
+                    texture_ptr,
+                    texture_width,
+                    fixed_u_fraction,
+                    fixed_v_fraction,
+                    color_diff,
+                    left_colors,
+                    x_step_current,
+                    xi_step
+                );
+                    
+                c0.store_unaligned_ptr(output_ptr);
             }
-                
-            output_ptr = unsafe { output_ptr.add((tile_width - xlen as usize) * 4) };
+
+            tile_line_ptr = unsafe { tile_line_ptr.add(tile_width * 4) };
+            output_ptr = tile_line_ptr;
 
             if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                texture_ptr = unsafe { texture_ptr.add((texture_width - xlen as usize) * 4) };
+                texture_line_ptr = unsafe { texture_line_ptr.add(texture_width * 4) };
+                texture_ptr = texture_line_ptr;
             }
 
             if COLOR_MODE == COLOR_MODE_LERP {

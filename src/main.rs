@@ -276,7 +276,6 @@ fn main() {
         }
         */
 
-        /*
         raster::Raster::render_aligned_texture(
             &mut output,
             &tile_info_2,
@@ -285,7 +284,6 @@ fn main() {
             &uv_coords,
             &texture_sizes,
         );
-        */
 
         raster::Raster::render_solid_lerp(
             &mut output,
