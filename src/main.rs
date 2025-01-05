@@ -190,7 +190,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X4,
             ..WindowOptions::default()
         },
     )
@@ -276,6 +276,7 @@ fn main() {
         }
         */
 
+        /*
         raster::Raster::render_aligned_texture(
             &mut output,
             &tile_info_2,
@@ -289,6 +290,16 @@ fn main() {
             &mut output,
             &tile_info_2,
             &coords,
+            crate::simd::i16x8::load_unaligned(&top_colors),
+            crate::simd::i16x8::load_unaligned(&bottom_colors),
+        );
+        */
+
+        raster::Raster::render_solid_lerp_radius(
+            &mut output,
+            &tile_info_2,
+            &coords,
+            50.0,
             crate::simd::i16x8::load_unaligned(&top_colors),
             crate::simd::i16x8::load_unaligned(&bottom_colors),
         );

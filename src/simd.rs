@@ -194,6 +194,34 @@ impl f32x4 {
     }
 
     #[cfg(target_arch = "aarch64")]
+    pub fn abs(self) -> Self {
+        Self {
+            v: unsafe { vabsq_f32(self.v) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn abs(self) -> Self {
+        Self {
+            v: unsafe { _mm_and_ps(self.v, _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff))) },
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn clamp(self, min: Self, max: Self) -> Self {
+        Self {
+            v: unsafe { vmaxq_f32(min.v, vminq_f32(self.v, max.v)) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn clamp(self, min: Self, max: Self) -> Self {
+        Self {
+            v: unsafe { _mm_min_ps(_mm_max_ps(self.v, min.v), max.v) },
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
     pub fn shuffle_0101(self) -> Self {
         Self {
             v: unsafe { vcombine_f32(vget_low_f32(self.v), vget_low_f32(self.v)) },
@@ -510,6 +538,97 @@ impl i16x8 {
             let result = _mm_shuffle_epi8(blended, shuffle_mask);
 
             Self { v: result }
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_1111_3333(self) -> Self {
+        unsafe {
+            let data = [
+                0, 1, 2, 3, 8, 9, 10, 11, // A0 replication
+                4, 5, 6, 7, 12, 13, 14, 15, // A1 replication
+            ];
+
+            // Define the shuffle mask as a NEON vector.
+            let mask = vld1q_u8(data.as_ptr());
+
+            // Combine the vectors into a table for the lookup.
+            let table = uint8x16x2_t {
+                0: vreinterpretq_u8_s16(self.v),
+                1: vreinterpretq_u8_s16(self.v),
+            };
+
+            // Perform the table lookup.
+            let result = vqtbl2q_u8(table, mask);
+
+            // Reinterpret the result as an `int16x8_t` and return it.
+            Self {
+                v: vreinterpretq_s16_u8(result),
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn shuffle_1111_3333(self) -> Self {
+        unsafe {
+            // pshuflw xmm0, xmm0, 245
+            let temp = _mm_shufflelo_epi16(self.v, 245);
+            let v = _mm_shuffle_epi32(temp, 80);
+            Self { v }
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_5555_7777(self) -> Self {
+        unsafe {
+            let data = [
+                16, 17, 18, 19, 24, 25, 26, 27, // A2 replication
+                20, 21, 22, 23, 28, 29, 30, 31, // A3 replication
+            ];
+
+            // Define the shuffle mask as a NEON vector.
+            let mask = vld1q_u8(data.as_ptr());
+
+            // Combine the vectors into a table for the lookup.
+            let table = uint8x16x2_t {
+                0: vreinterpretq_u8_s16(self.v),
+                1: vreinterpretq_u8_s16(self.v),
+            };
+
+            // Perform the table lookup.
+            let result = vqtbl2q_u8(table, mask);
+
+            // Reinterpret the result as an `int16x8_t` and return it.
+            Self {
+                v: vreinterpretq_s16_u8(result),
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn shuffle_0000_2222(self) -> Self {
+        unsafe {
+            let temp = _mm_shufflelo_epi16(self.v, 160);
+            let v = _mm_shuffle_epi32(temp, 80);
+            Self { v }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn shuffle_4444_6666(self) -> Self {
+        unsafe {
+            let temp = _mm_shufflehi_epi16(self.v, 160);
+            let v = _mm_shuffle_epi32(temp, 250);
+            Self { v }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn shuffle_5555_7777(self) -> Self {
+        unsafe {
+            let temp = _mm_shufflehi_epi16(self.v, 245);
+            let v = _mm_shuffle_epi32(temp, 250);
+            Self { v }
         }
     }
 
@@ -1336,6 +1455,22 @@ mod f16x8_tests {
         let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
         let result = vec.shuffle_333_0x7fff_777_0x7fff().to_array();
         assert_eq!(result, [4, 4, 4, 0x7fff, 8, 8, 8, 0x7fff]);
+    }
+
+    #[test]
+    fn test_i16x8_shuffle_1111_3333() {
+        // Test shuffling an i16x8 register
+        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let result = vec.shuffle_1111_3333().to_array();
+        assert_eq!(result, [2, 2, 2, 2, 4, 4, 4, 4]);
+    }
+
+    #[test]
+    fn test_i16x8_shuffle_5555_7777() {
+        // Test shuffling an i16x8 register
+        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let result = vec.shuffle_5555_7777().to_array();
+        assert_eq!(result, [6, 6, 6, 6, 8, 8, 8, 8]);
     }
 }
 

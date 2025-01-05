@@ -19,6 +19,36 @@ const COLOR_MODE_NONE: usize = 0;
 const COLOR_MODE_SOLID: usize = 1;
 const COLOR_MODE_LERP: usize = 2;
 
+const EDGE_MODE_NONE: usize = 0;
+const EDGE_MODE_ROUNDED: usize = 1;
+
+#[derive(Copy, Clone)]
+enum Corner {
+    TopLeft,
+    TopRight,
+    BottomRight,
+    BottomLeft,
+}
+
+const CORNER_OFFSETS: [(f32, f32); 4] = [
+    (1.0, 1.0),       // TopLeft: No shift
+    (1.0, 0.0),       // TopRight: Shift right
+    (0.0, 1.0),       // BottomLeft: Shift down
+    (1.0, 1.0),       // BottomRight: Shift right and down
+];
+
+const CORNER_DIRECTIONS: [(f32, f32); 4] = [
+    (1.0, 1.0),  // TopLeft: positive x and positive y
+    (-1.0, 1.0), // TopRight: negative x and positive y
+    (1.0, -1.0), // BottomLeft: positive x and negative y
+    (-1.0, -1.0) // BottomRight: negative x and negative y
+];
+
+fn get_corner_direction(corner: Corner) -> (f32, f32) {
+    // Lookup direction values (x_direction, y_direction) for the specified corner
+    CORNER_DIRECTIONS[corner as usize]
+}
+
 impl Raster {
     #[inline(always)]
     fn sample_aligned_texture(
@@ -112,19 +142,30 @@ impl Raster {
     }
 
 
-    fn render_internal<const COLOR_MODE: usize, const TEXTURE_MODE: usize>(
+    fn render_internal<const COLOR_MODE: usize, const TEXTURE_MODE: usize, const EDGE_MODE: usize>(
         output: &mut [i16],
         texture_data: *const i16,
         tile_info: &TileInfo,
         uv_data: &[f32],
         texture_sizes: &[i32],
         coords: &[f32],
+        border_radius: f32,
+        radius_direction: usize,
         top_colors: i16x8,
         bottom_colors: i16x8)
     {
         let x0y0x1y1_adjust = (f32x4::load_unaligned(coords) - tile_info.offsets) + f32x4::new_splat(0.5);
         let x0y0x1y1 = x0y0x1y1_adjust.floor();
         let x0y0x1y1_int = x0y0x1y1.as_i32x4(); 
+
+        // Used for stepping for edges with radius
+        let mut rounding_y_step = f32x4::new_splat(0.0);
+        let mut rounding_x_step = f32x4::new_splat(0.0);
+        let mut rounding_y_current = f32x4::new_splat(0.0);
+        let mut rounding_x_current = f32x4::new_splat(0.0);
+        let mut border_radius_v = f32x4::new_splat(0.0);
+        let mut circle_center_x = f32x4::new_splat(0.0);
+        let mut circle_center_y = f32x4::new_splat(0.0);
 
         let mut xi_start = i16x8::new_splat(0);
         let mut yi_start = i16x8::new_splat(0);
@@ -183,6 +224,19 @@ impl Raster {
             xi_start += xi_step * i16x8::new(0,0,0,0,1,1,1,1);
             xi_step = xi_step * i16x8::new_splat(2);
         }
+
+        // If we have rounded edges we need to adjust the start and end values
+        if EDGE_MODE == EDGE_MODE_ROUNDED {
+            // TODO: Get the corret corner direction
+            rounding_y_step = f32x4::new_splat(1.0);
+            rounding_x_step = f32x4::new(4.0, 4.0, 4.0, 4.0);
+            rounding_y_current = f32x4::new_splat(0.0);
+            rounding_x_current = f32x4::new(0.5, 1.5, 2.5, 3.5);
+            border_radius_v = f32x4::new_splat(border_radius);
+            // TODO: Fixme
+            circle_center_x = x0y0x1y1.shuffle_0101();
+            circle_center_y = x0y0x1y1.shuffle_0101();
+        }
         
         let x0 = x0.max(0);
         let y0 = y0.max(0);
@@ -210,8 +264,17 @@ impl Raster {
 
         let mut tile_line_ptr = output_ptr;
         let mut texture_line_ptr = texture_ptr;
+        let mut circle_y2 = f32x4::new_splat(0.0);
+        let mut circle_distance = i16x8::new_splat(0);
 
         for _y in 0..ylen {
+            // as y2 for the circle is constant in the inner loop we can calculate it here
+            if EDGE_MODE == EDGE_MODE_ROUNDED {
+                let t0 = circle_center_y - rounding_y_current;
+                circle_y2 = t0 * t0; 
+                rounding_x_current = f32x4::new(0.0, 1.0, 2.0, 3.0);
+            }
+
             if COLOR_MODE == COLOR_MODE_LERP {
                 let left_right_colors = i16x8::lerp_diff(top_colors, color_top_bottom_diff, yi_start);
                 left_colors = left_right_colors.shuffle_0123_0123();
@@ -222,7 +285,20 @@ impl Raster {
             x_step_current = xi_start;
 
             for _x in 0..(xlen >> 2) {
-                let (c0, c1) = Self::process_pixels::<PIXEL_COUNT_4, COLOR_MODE, TEXTURE_MODE>(
+                // Calculate the distance to the circle center
+                if EDGE_MODE == EDGE_MODE_ROUNDED {
+                    let t0 = circle_center_x - rounding_x_current;
+                    let circle_x2 = t0 * t0;
+                    let dist = (circle_x2 + circle_y2).sqrt();
+                    let dist_to_edge = dist - f32x4::new_splat(border_radius);
+                    let dist_to_edge = f32x4::new_splat(1.0) - dist_to_edge.clamp(f32x4::new_splat(0.0), f32x4::new_splat(1.0));
+
+                    // Calculate the distance to the circle center and scale it up 15 bits as that
+                    // is what we used the color range this allows us to have accurate blending.
+                    circle_distance = (dist_to_edge * f32x4::new_splat(32767.0)).as_i32x4().as_i16x8();
+                }
+
+                let (mut c0, mut c1) = Self::process_pixels::<PIXEL_COUNT_4, COLOR_MODE, TEXTURE_MODE>(
                     current_color,
                     texture_ptr,
                     texture_width,
@@ -233,6 +309,17 @@ impl Raster {
                     x_step_current,
                     xi_step
                 );
+
+                if EDGE_MODE == EDGE_MODE_ROUNDED {
+                    // At his point c0,c1 contains 4 colors that we need to blend based on the
+                    // distance to the circle center. So we need to splat distance for each radius
+                    // calculated to get the correct blending value.
+                    let r0 = circle_distance.shuffle_0000_2222();
+                    let r1 = circle_distance.shuffle_4444_6666();
+
+                    c0 = i16x8::mul_high(c0, r0);
+                    c1 = i16x8::mul_high(c1, r1);
+                }
 
                 c0.store_unaligned_ptr(output_ptr);
                 c1.store_unaligned_ptr(unsafe { output_ptr.add(8) });
@@ -245,6 +332,10 @@ impl Raster {
 
                 if COLOR_MODE == COLOR_MODE_LERP {
                     x_step_current += xi_step * i16x8::new_splat(2);
+                }
+
+                if EDGE_MODE == EDGE_MODE_ROUNDED {
+                    rounding_x_current += rounding_x_step;
                 }
             }
 
@@ -307,6 +398,10 @@ impl Raster {
             if COLOR_MODE == COLOR_MODE_LERP {
                 yi_start += yi_step;
             }
+
+            if EDGE_MODE == EDGE_MODE_ROUNDED {
+                rounding_y_current += rounding_y_step;
+            }
         }
     }
 
@@ -319,13 +414,15 @@ impl Raster {
         uv_data: &[f32],
         texture_sizes: &[i32])
     {
-        Self::render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_ALIGNED>(
+        Self::render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_ALIGNED, EDGE_MODE_NONE>(
             output,
             texture_data,
             tile_info,
             uv_data,
             texture_sizes,
             coords,
+            0.0,
+            0,
             i16x8::new_splat(0),
             i16x8::new_splat(0),
         );
@@ -342,15 +439,44 @@ impl Raster {
         let uv_data = [0.0];
         let texture_sizes = [0];
 
-        Self::render_internal::<COLOR_MODE_LERP, TEXTURE_MODE_NONE>(
+        Self::render_internal::<COLOR_MODE_LERP, TEXTURE_MODE_NONE, EDGE_MODE_NONE>(
             output,
             std::ptr::null(),
             tile_info,
             &uv_data,
             &texture_sizes,
             coords,
+            0.0,
+            0,
             top_colors,
-            bottom_colors
+            bottom_colors,
         );
     }
+
+    #[inline(never)]
+    pub fn render_solid_lerp_radius(
+        output: &mut [i16],
+        tile_info: &TileInfo,
+        coords: &[f32],
+        radius: f32,
+        top_colors: i16x8,
+        bottom_colors: i16x8)
+    {
+        let uv_data = [0.0];
+        let texture_sizes = [0];
+
+        Self::render_internal::<COLOR_MODE_LERP, TEXTURE_MODE_NONE, EDGE_MODE_ROUNDED>(
+            output,
+            std::ptr::null(),
+            tile_info,
+            &uv_data,
+            &texture_sizes,
+            coords,
+            radius,
+            0,
+            top_colors,
+            bottom_colors,
+        );
+    }
+
 }
