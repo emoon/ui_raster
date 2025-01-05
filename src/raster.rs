@@ -32,22 +32,10 @@ enum Corner {
 
 const CORNER_OFFSETS: [(f32, f32); 4] = [
     (1.0, 1.0),       // TopLeft: No shift
-    (1.0, 0.0),       // TopRight: Shift right
-    (0.0, 1.0),       // BottomLeft: Shift down
+    (0.0, 1.0),       // TopRight: Shift down
+    (1.0, 0.0),       // BottemLeft: Shift right
     (1.0, 1.0),       // BottomRight: Shift right and down
 ];
-
-const CORNER_DIRECTIONS: [(f32, f32); 4] = [
-    (1.0, 1.0),  // TopLeft: positive x and positive y
-    (-1.0, 1.0), // TopRight: negative x and positive y
-    (1.0, -1.0), // BottomLeft: positive x and negative y
-    (-1.0, -1.0) // BottomRight: negative x and negative y
-];
-
-fn get_corner_direction(corner: Corner) -> (f32, f32) {
-    // Lookup direction values (x_direction, y_direction) for the specified corner
-    CORNER_DIRECTIONS[corner as usize]
-}
 
 impl Raster {
     #[inline(always)]
@@ -227,15 +215,19 @@ impl Raster {
 
         // If we have rounded edges we need to adjust the start and end values
         if EDGE_MODE == EDGE_MODE_ROUNDED {
+            let x0f = x0y0x1y1.extract::<0>();
+            let y0f = x0y0x1y1.extract::<1>();
+
+            let center_adjust = CORNER_OFFSETS[radius_direction & 3];
+
             // TODO: Get the corret corner direction
             rounding_y_step = f32x4::new_splat(1.0);
             rounding_x_step = f32x4::new(4.0, 4.0, 4.0, 4.0);
-            rounding_y_current = f32x4::new_splat(0.0);
-            rounding_x_current = f32x4::new(0.5, 1.5, 2.5, 3.5);
+            rounding_y_current = f32x4::new_splat(x0y0x1y1.extract::<1>());
             border_radius_v = f32x4::new_splat(border_radius);
             // TODO: Fixme
-            circle_center_x = x0y0x1y1.shuffle_0101();
-            circle_center_y = x0y0x1y1.shuffle_0101();
+            circle_center_x = f32x4::new_splat(x0f + border_radius * center_adjust.0);
+            circle_center_y = f32x4::new_splat(y0f + border_radius * center_adjust.1);
         }
         
         let x0 = x0.max(0);
@@ -270,9 +262,15 @@ impl Raster {
         for _y in 0..ylen {
             // as y2 for the circle is constant in the inner loop we can calculate it here
             if EDGE_MODE == EDGE_MODE_ROUNDED {
-                let t0 = circle_center_y - rounding_y_current;
+                let x0f = x0y0x1y1.extract::<0>();
+
+                let t0 = rounding_y_current - circle_center_y;
                 circle_y2 = t0 * t0; 
-                rounding_x_current = f32x4::new(0.0, 1.0, 2.0, 3.0);
+                rounding_x_current = f32x4::new(
+                    x0f, 
+                    x0f + 1.0, 
+                    x0f + 2.0, 
+                    x0f + 3.0);
             }
 
             if COLOR_MODE == COLOR_MODE_LERP {
@@ -287,10 +285,11 @@ impl Raster {
             for _x in 0..(xlen >> 2) {
                 // Calculate the distance to the circle center
                 if EDGE_MODE == EDGE_MODE_ROUNDED {
-                    let t0 = circle_center_x - rounding_x_current;
+                    let t0 = rounding_x_current - circle_center_x;
                     let circle_x2 = t0 * t0;
                     let dist = (circle_x2 + circle_y2).sqrt();
-                    let dist_to_edge = dist - f32x4::new_splat(border_radius);
+                    let dist_to_edge = dist - border_radius_v;
+
                     let dist_to_edge = f32x4::new_splat(1.0) - dist_to_edge.clamp(f32x4::new_splat(0.0), f32x4::new_splat(1.0));
 
                     // Calculate the distance to the circle center and scale it up 15 bits as that
@@ -473,7 +472,7 @@ impl Raster {
             &texture_sizes,
             coords,
             radius,
-            0,
+            2,
             top_colors,
             bottom_colors,
         );

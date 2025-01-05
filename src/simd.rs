@@ -104,6 +104,16 @@ impl f32x4 {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    pub fn extract<const LANE: i32>(self) -> f32 {
+        unsafe { vgetq_lane_f32(self.v, LANE) }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn extract<const LANE: i32>(self) -> f32 {
+        unsafe { f32::from_bits(_mm_extract_ps(self.v, LANE) as _) }
+    }
+
     pub fn new_xy(a: f32, b: f32) -> Self {
         Self::new(a, b, a, b)
     }
