@@ -78,6 +78,38 @@ impl Raster {
     }
 
     #[inline(always)]
+    fn multi_sample_aligned_texture<const COUNT: usize>(
+        texture: *const i16,
+        width: usize,
+        u: i16x8,
+        v: i16x8,
+    ) -> (i16x8, i16x8) {
+        let zero = i16x8::new_splat(0);
+
+        if COUNT == 1 {
+            let t0 = Self::sample_aligned_texture(texture, width, u, v, 0);
+            (t0, zero)
+        } else if COUNT == 2 {
+            let t0 = Self::sample_aligned_texture(texture, width, u, v, 0);
+            let t1 = Self::sample_aligned_texture(texture, width, u, v, 4);
+            (i16x8::merge(t0, t1), zero)
+        } else if COUNT == 3 {
+            let t0 = Self::sample_aligned_texture(texture, width, u, v, 0);
+            let t1 = Self::sample_aligned_texture(texture, width, u, v, 4);
+            let t2 = Self::sample_aligned_texture(texture, width, u, v, 8);
+            (i16x8::merge(t0, t1), t2)
+        } else if COUNT == 4 {
+            let t0 = Self::sample_aligned_texture(texture, width, u, v, 0);
+            let t1 = Self::sample_aligned_texture(texture, width, u, v, 4);
+            let t2 = Self::sample_aligned_texture(texture, width, u, v, 8);
+            let t3 = Self::sample_aligned_texture(texture, width, u, v, 12);
+            (i16x8::merge(t0, t1), i16x8::merge(t2, t3))
+        } else {
+            unimplemented!()
+        }
+    }
+
+    #[inline(always)]
     fn process_pixels<
         const COUNT: usize,
         const COLOR_MODE: usize,
@@ -99,37 +131,12 @@ impl Raster {
 
         if COUNT == PIXEL_COUNT_4 {
             if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                let t0 = Self::sample_aligned_texture(
+                (color_0, color_1) = Self::multi_sample_aligned_texture::<4>(
                     texture,
                     texture_width,
                     fixed_u_fraction,
                     fixed_v_fraction,
-                    0,
                 );
-                let t1 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    4,
-                );
-                let t2 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    8,
-                );
-                let t3 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    12,
-                );
-
-                color_0 = i16x8::merge(t0, t1);
-                color_1 = i16x8::merge(t2, t3);
             }
 
             if COLOR_MODE == COLOR_MODE_LERP {
@@ -139,30 +146,12 @@ impl Raster {
             }
         } else if COUNT == PIXEL_COUNT_3 {
             if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                let t0 = Self::sample_aligned_texture(
+                (color_0, color_1) = Self::multi_sample_aligned_texture::<3>(
                     texture,
                     texture_width,
                     fixed_u_fraction,
                     fixed_v_fraction,
-                    0,
                 );
-                let t1 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    4,
-                );
-                let t2 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    8,
-                );
-
-                color_0 = i16x8::merge(t0, t1);
-                color_1 = t2;
             }
 
             if COLOR_MODE == COLOR_MODE_LERP {
@@ -172,21 +161,12 @@ impl Raster {
             }
         } else if COUNT == PIXEL_COUNT_2 {
             if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-                let t0 = Self::sample_aligned_texture(
+                (color_0, _) = Self::multi_sample_aligned_texture::<2>(
                     texture,
                     texture_width,
                     fixed_u_fraction,
                     fixed_v_fraction,
-                    0,
                 );
-                let t1 = Self::sample_aligned_texture(
-                    texture,
-                    texture_width,
-                    fixed_u_fraction,
-                    fixed_v_fraction,
-                    4,
-                );
-                color_0 = i16x8::merge(t0, t1);
             }
 
             if COLOR_MODE == COLOR_MODE_LERP {
