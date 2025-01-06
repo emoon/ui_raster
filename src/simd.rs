@@ -504,30 +504,13 @@ impl i16x8 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn shuffle_333_0x7fff_777_0x7fff(self) -> Self {
-        unsafe {
-            let splat_7fff = i16x8::new_splat(0x7fff);
-            let data = [
-                8, 7, 6, 7, 6, 7, 16, 17, // A0 replication and 0x7fff for R0
-                14, 15, 14, 15, 14, 15, 16, 17, // A1 replication and 0x7fff for R1
-            ];
+        let splat_7fff = i16x8::new_splat(0x7fff);
+        let data = [
+            8, 7, 6, 7, 6, 7, 16, 17, // A0 replication and 0x7fff for R0
+            14, 15, 14, 15, 14, 15, 16, 17, // A1 replication and 0x7fff for R1
+        ];
 
-            // Define the shuffle mask as a NEON vector.
-            let mask = vld1q_u8(data.as_ptr());
-
-            // Combine the vectors into a table for the lookup.
-            let table = uint8x16x2_t {
-                0: vreinterpretq_u8_s16(self.v),
-                1: vreinterpretq_u8_s16(splat_7fff.v),
-            };
-
-            // Perform the table lookup.
-            let result = vqtbl2q_u8(table, mask);
-
-            // Reinterpret the result as an `int16x8_t` and return it.
-            Self {
-                v: vreinterpretq_s16_u8(result),
-            }
-        }
+        Self::tablebased_shuffle(self, splat_7fff, data)
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -553,29 +536,12 @@ impl i16x8 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn shuffle_1111_3333(self) -> Self {
-        unsafe {
-            let data = [
-                0, 1, 2, 3, 8, 9, 10, 11, // A0 replication
-                4, 5, 6, 7, 12, 13, 14, 15, // A1 replication
-            ];
+        let data = [
+            0, 1, 2, 3, 8, 9, 10, 11,
+            4, 5, 6, 7, 12, 13, 14, 15,
+        ];
 
-            // Define the shuffle mask as a NEON vector.
-            let mask = vld1q_u8(data.as_ptr());
-
-            // Combine the vectors into a table for the lookup.
-            let table = uint8x16x2_t {
-                0: vreinterpretq_u8_s16(self.v),
-                1: vreinterpretq_u8_s16(self.v),
-            };
-
-            // Perform the table lookup.
-            let result = vqtbl2q_u8(table, mask);
-
-            // Reinterpret the result as an `int16x8_t` and return it.
-            Self {
-                v: vreinterpretq_s16_u8(result),
-            }
-        }
+        Self::tablebased_shuffle(self, self, data)
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -589,20 +555,16 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "aarch64")]
-    pub fn shuffle_5555_7777(self) -> Self {
+    #[inline(always)]
+    fn tablebased_shuffle(self, v1: Self, data: [u8; 16]) -> Self {
         unsafe {
-            let data = [
-                16, 17, 18, 19, 24, 25, 26, 27, // A2 replication
-                20, 21, 22, 23, 28, 29, 30, 31, // A3 replication
-            ];
-
             // Define the shuffle mask as a NEON vector.
             let mask = vld1q_u8(data.as_ptr());
 
             // Combine the vectors into a table for the lookup.
             let table = uint8x16x2_t {
                 0: vreinterpretq_u8_s16(self.v),
-                1: vreinterpretq_u8_s16(self.v),
+                1: vreinterpretq_u8_s16(v1.v),
             };
 
             // Perform the table lookup.
@@ -615,6 +577,26 @@ impl i16x8 {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_5555_7777(self) -> Self {
+        let data = [
+            16, 17, 18, 19, 24, 25, 26, 27,
+            20, 21, 22, 23, 28, 29, 30, 31,
+        ];
+
+        Self::tablebased_shuffle(self, self, data)
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_0000_2222(self) -> Self {
+        let data = [
+            0, 1, 0, 1, 0, 1, 0, 1, // Duplicate 0th element
+            4, 5, 4, 5, 4, 5, 4, 5, // Duplicate 2nd element
+        ];
+
+        Self::tablebased_shuffle(self, self, data)
+    }
+
     #[cfg(target_arch = "x86_64")]
     pub fn shuffle_0000_2222(self) -> Self {
         unsafe {
@@ -622,6 +604,16 @@ impl i16x8 {
             let v = _mm_shuffle_epi32(temp, 80);
             Self { v }
         }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_4444_6666(self) -> Self {
+        let data = [
+            8, 9, 8, 9, 8, 9, 8, 9, // Duplicate 4th element
+            12, 13, 12, 13, 12, 13, 12, 13, // Duplicate 6th element
+        ];
+
+        Self::tablebased_shuffle(self, self, data)
     }
 
     #[cfg(target_arch = "x86_64")]
