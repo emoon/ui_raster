@@ -5,8 +5,8 @@ use std::fs::File;
 //use ispc_rt::ispc_module;
 //ispc_module!(ui_raster);
 
-mod simd;
 pub mod raster;
+mod simd;
 
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
@@ -97,7 +97,7 @@ struct Texture {
 }
 
 fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
-   let mut decoder = Decoder::new(File::open(path).unwrap());
+    let mut decoder = Decoder::new(File::open(path).unwrap());
 
     // Reading the image in RGBA format.
     decoder.set_transformations(Transformations::ALPHA);
@@ -105,7 +105,7 @@ fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
     let mut reader = decoder.read_info().unwrap();
     let size = reader.output_buffer_size();
 
-    let mut u8_buffer = vec![0u8; size]; 
+    let mut u8_buffer = vec![0u8; size];
     let mut data = Vec::with_capacity(size * 4);
 
     // Read the next frame. Currently this function should only be called once.
@@ -139,16 +139,15 @@ fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
     }
 }
 
-
 fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i16, i16, i16, i16) {
     let r = srgb_to_linear[r as usize] as i16;
     let g = srgb_to_linear[g as usize] as i16;
     let b = srgb_to_linear[b as usize] as i16;
     (r, g, b, (a as i16) << 7)
-} 
+}
 
 /*
-fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture { 
+fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
     let mut texture = vec![0u16; 512 * 512 * 4];
 
     for y in 0..512 {
@@ -179,7 +178,7 @@ fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
     let texture = read_texture("assets/uv.png", &srgb_to_linear);
-    //let texture = generate_test_texture(&srgb_to_linear); 
+    //let texture = generate_test_texture(&srgb_to_linear);
 
     let tile_width = 1280;
     let tile_height = 512;
@@ -237,8 +236,14 @@ fn main() {
         let radius = 32.0;
 
         let coords = [
-            16.0 + x_pos, 16.0 + x_pos, 16.0 + (radius * 1.0) + x_pos, 16.0 + (radius * 1.0) + x_pos,
-            1.0, 1.0, 2.0, 2.0,
+            16.0 + x_pos,
+            16.0 + x_pos,
+            16.0 + (radius * 1.0) + x_pos,
+            16.0 + (radius * 1.0) + x_pos,
+            1.0,
+            1.0,
+            2.0,
+            2.0,
         ];
 
         //size += 0.01;
@@ -255,15 +260,17 @@ fn main() {
         }
         */
 
-        let uv_coords = [
-            0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        ];
+        let uv_coords = [0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
         let texture_sizes = [
-            texture.width as i32, texture.height as i32, 
-            texture.width as i32, texture.height as i32, 
-            texture.width as i32, texture.height as i32, 
-            texture.width as i32, texture.height as i32, 
+            texture.width as i32,
+            texture.height as i32,
+            texture.width as i32,
+            texture.height as i32,
+            texture.width as i32,
+            texture.height as i32,
+            texture.width as i32,
+            texture.height as i32,
         ];
 
         /*

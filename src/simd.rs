@@ -7,7 +7,7 @@ use std::arch::asm;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use core::ops::{Add, AddAssign, Mul, Sub, Div};
+use core::ops::{Add, AddAssign, Div, Mul, Sub};
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -61,7 +61,7 @@ impl f32x4 {
             v: unsafe { _mm_loadu_ps(data.as_ptr()) },
         }
     }
-        
+
     #[cfg(target_arch = "aarch64")]
     pub fn new_splat(a: f32) -> Self {
         Self {
@@ -81,7 +81,7 @@ impl f32x4 {
         Self {
             v: unsafe { vcvtq_f32_s32(vcvtq_s32_f32(self.v)) },
         }
-    } 
+    }
 
     #[cfg(target_arch = "x86_64")]
     pub fn drop_fraction(self) -> Self {
@@ -122,7 +122,7 @@ impl f32x4 {
     pub fn new(a: f32, b: f32, c: f32, d: f32) -> Self {
         let t = [a, b, c, d];
         Self {
-            v: unsafe { vld1q_f32(t.as_ptr()) }
+            v: unsafe { vld1q_f32(t.as_ptr()) },
         }
     }
 
@@ -395,7 +395,10 @@ impl i16x8 {
     pub fn lerp(start: Self, end: Self, t: i16x8) -> Self {
         Self {
             v: unsafe {
-                _mm_add_epi16(_mm_mulhrs_epi16(_mm_sub_epi16(end.v, start.v), t.v), start.v)
+                _mm_add_epi16(
+                    _mm_mulhrs_epi16(_mm_sub_epi16(end.v, start.v), t.v),
+                    start.v,
+                )
             },
         }
     }
@@ -437,26 +440,32 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn splat_0000_0000<>(self) -> Self {
+    pub fn splat_0000_0000(self) -> Self {
         unsafe {
-            let lower = _mm_shufflelo_epi16(self.v, 0b00_00_00_00); 
-            Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
+            let lower = _mm_shufflelo_epi16(self.v, 0b00_00_00_00);
+            Self {
+                v: _mm_shuffle_epi32(lower, 0b00_00_00_00),
+            }
         }
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn splat_1111_1111<>(self) -> Self {
+    pub fn splat_1111_1111(self) -> Self {
         unsafe {
-            let lower = _mm_shufflelo_epi16(self.v, 0b01_01_01_01); 
-            Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
+            let lower = _mm_shufflelo_epi16(self.v, 0b01_01_01_01);
+            Self {
+                v: _mm_shuffle_epi32(lower, 0b00_00_00_00),
+            }
         }
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn splat_2222_2222<>(self) -> Self {
+    pub fn splat_2222_2222(self) -> Self {
         unsafe {
-            let lower = _mm_shufflelo_epi16(self.v, 0b10_10_10_10); 
-            Self { v: _mm_shuffle_epi32(lower, 0b00_00_00_00) } 
+            let lower = _mm_shufflelo_epi16(self.v, 0b10_10_10_10);
+            Self {
+                v: _mm_shuffle_epi32(lower, 0b00_00_00_00),
+            }
         }
     }
 
@@ -524,7 +533,7 @@ impl i16x8 {
             // Define the shuffle mask equivalent to .LCPI0_0.
             let shuffle_mask = _mm_set_epi8(
                 1, 0, 15, 14, 15, 14, 15, 14, // Replicate A1 and insert splat
-                1, 0, 7, 6, 7, 6, 7, 6,       // Replicate A0 and insert splat
+                1, 0, 7, 6, 7, 6, 7, 6, // Replicate A0 and insert splat
             );
 
             // Shuffle the blended vector with the shuffle mask.
@@ -536,10 +545,7 @@ impl i16x8 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn shuffle_1111_3333(self) -> Self {
-        let data = [
-            0, 1, 2, 3, 8, 9, 10, 11,
-            4, 5, 6, 7, 12, 13, 14, 15,
-        ];
+        let data = [0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7, 12, 13, 14, 15];
 
         Self::tablebased_shuffle(self, self, data)
     }
@@ -580,8 +586,7 @@ impl i16x8 {
     #[cfg(target_arch = "aarch64")]
     pub fn shuffle_5555_7777(self) -> Self {
         let data = [
-            16, 17, 18, 19, 24, 25, 26, 27,
-            20, 21, 22, 23, 28, 29, 30, 31,
+            16, 17, 18, 19, 24, 25, 26, 27, 20, 21, 22, 23, 28, 29, 30, 31,
         ];
 
         Self::tablebased_shuffle(self, self, data)
@@ -644,7 +649,12 @@ impl i16x8 {
     #[cfg(target_arch = "x86_64")]
     pub fn merge(v0: Self, v1: Self) -> Self {
         Self {
-            v: unsafe { _mm_castps_si128(_mm_movelh_ps(_mm_castsi128_ps(v0.v), _mm_castsi128_ps(v1.v))) }, 
+            v: unsafe {
+                _mm_castps_si128(_mm_movelh_ps(
+                    _mm_castsi128_ps(v0.v),
+                    _mm_castsi128_ps(v1.v),
+                ))
+            },
         }
     }
 
@@ -673,12 +683,10 @@ impl i16x8 {
     }
 }
 
-
-
 impl i32x4 {
     #[cfg(target_arch = "aarch64")]
     pub fn new(a: i32, b: i32, c: i32, d: i32) -> Self {
-        let t = [a, b, c, d]; 
+        let t = [a, b, c, d];
         Self {
             v: unsafe { vld1q_s32(t.as_ptr()) },
         }
@@ -793,7 +801,9 @@ impl i32x4 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn as_i16x8(self) -> i16x8 {
-        i16x8 { v: unsafe { vreinterpretq_s16_s32(self.v) } }
+        i16x8 {
+            v: unsafe { vreinterpretq_s16_s32(self.v) },
+        }
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -835,7 +845,6 @@ impl i32x4 {
         }
     }
 }
-
 
 impl f16x8 {
     #[cfg(target_arch = "aarch64")]
@@ -939,7 +948,7 @@ impl f16x8 {
             v0: self.v0.mul(rhs.v0),
             v1: self.v1.mul(rhs.v1),
         }
-    } 
+    }
 
     #[cfg(target_arch = "aarch64")]
     pub fn as_i16x8(self) -> i16x8 {
@@ -958,15 +967,14 @@ impl f16x8 {
     #[cfg(target_arch = "x86_64")]
     pub fn as_i16x8(self) -> i16x8 {
         unsafe {
-            let int_v1 = self.v0.as_i32x4(); 
+            let int_v1 = self.v0.as_i32x4();
             let int_v2 = self.v1.as_i32x4();
 
             i16x8 {
                 v: _mm_packs_epi16(int_v1.v, int_v2.v),
             }
         }
-    } 
-
+    }
 
     #[cfg(target_arch = "aarch64")]
     #[inline(never)]
@@ -1028,7 +1036,7 @@ impl Sub for f32x4 {
         self.sub(rhs)
     }
 }
-    
+
 impl Add for f32x4 {
     type Output = Self;
 
@@ -1190,7 +1198,7 @@ mod f32x4_tests {
         assert_eq!(result.to_array(), [1.0, 2.0, 3.0, 4.0]);
     }
 }
- 
+
 #[cfg(test)]
 mod i32x4_tests {
     use super::*;
@@ -1247,7 +1255,6 @@ mod i32x4_tests {
     }
 }
 
-
 #[cfg(test)]
 mod i16x8_tests {
     use super::*;
@@ -1281,7 +1288,9 @@ mod i16x8_tests {
 
         // `t` values (fixed-point representation in range [0, 0x7FFF])
         // Equivalent to 0.5 in fixed-point
-        let t = i16x8::new(0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000);
+        let t = i16x8::new(
+            0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000,
+        );
 
         // Expected result for t = 0.5
         // Lerp formula: result = start + (end - start) * t
@@ -1303,7 +1312,9 @@ mod i16x8_tests {
 
         // `t` values (fixed-point representation in range [0, 0x7FFF])
         // Equivalent to 0.5 in fixed-point
-        let t = i16x8::new(0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000);
+        let t = i16x8::new(
+            0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000, 0x4000,
+        );
 
         // Expected result for t = 0.5
         // Lerp step formula: result = start + delta * t
@@ -1475,6 +1486,3 @@ mod f16x8_tests {
         assert_eq!(result, [6, 6, 6, 6, 8, 8, 8, 8]);
     }
 }
-
-
-
