@@ -317,8 +317,8 @@ fn render_internal<
 
     // If we have rounded edges we need to adjust the start and end values
     if ROUND_MODE == ROUND_MODE_ENABLED {
-        let x0f = x0y0x1y1.extract::<0>();
-        let y0f = x0y0x1y1.extract::<1>();
+        let x0f = x0y0x1y1_adjust.extract::<0>();
+        let y0f = x0y0x1y1_adjust.extract::<1>();
 
         let center_adjust = CORNER_OFFSETS[radius_direction & 3];
 
@@ -567,7 +567,7 @@ impl Raster {
             &texture_sizes,
             coords,
             radius,
-            2,
+            0,
             top_colors,
             bottom_colors,
         );
