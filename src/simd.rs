@@ -334,6 +334,20 @@ impl i16x8 {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    pub fn store_unaligned_ptr_lower(self, data: *mut i16) {
+        unsafe {
+            vst1q_s16(data, vget_low_s16(self.v));
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn store_unaligned_ptr_lower(self, data: *mut i16) {
+        unsafe {
+            _mm_storeu_si64(data as *mut u8, self.v);
+        }
+    }
+
     #[cfg(target_arch = "x86_64")]
     pub fn load_unaligned(data: &[i16]) -> Self {
         Self {
@@ -1484,5 +1498,14 @@ mod f16x8_tests {
         let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
         let result = vec.shuffle_5555_7777().to_array();
         assert_eq!(result, [6, 6, 6, 6, 8, 8, 8, 8]);
+    }
+
+    #[test]
+    fn test_i16x8_store_lower() {
+        // Test storing the lower half of an i16x8 register
+        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let mut data = [0; 8];
+        vec.store_unaligned_ptr_lower(data.as_mut_ptr());
+        assert_eq!(data, [1, 2, 3, 4, 0, 0, 0, 0]);
     }
 }
