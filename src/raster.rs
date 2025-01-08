@@ -75,7 +75,7 @@ fn calculate_rounding_blend(
 
     let dist_to_edge =
         f32x4::new_splat(1.0) - dist_to_edge.clamp(f32x4::new_splat(0.0), f32x4::new_splat(1.0));
-
+    
     (dist_to_edge * f32x4::new_splat(32767.0))
         .as_i32x4()
         .as_i16x8()
@@ -206,7 +206,6 @@ fn process_pixels<
     // If we have rounded we need to adjust the color based on the distance to the circle center
     if ROUND_MODE == ROUND_MODE_ENABLED {
         if COUNT >= PIXEL_COUNT_3 {
-            // At his point c0,c1 contains 4 colors that we need to blend based on the
             // distance to the circle center. So we need to splat distance for each radius
             // calculated to get the correct blending value.
             color_0 = i16x8::mul_high(color_0, c_blend.shuffle_0000_2222());
@@ -369,6 +368,8 @@ fn render_internal<
     let mut circle_y2 = f32x4::new_splat(0.0);
     let mut circle_distance = i16x8::new_splat(0);
 
+    dbg!(x0y0x1y1.extract::<0>());
+
     for _y in 0..ylen {
         // as y2 for the circle is constant in the inner loop we can calculate it here
         if ROUND_MODE == ROUND_MODE_ENABLED {
@@ -429,7 +430,7 @@ fn render_internal<
         }
 
         // Calculate the distance to the circle center
-        if ROUND_MODE == ROUND_MODE_ENABLED {
+        if ROUND_MODE == ROUND_MODE_ENABLED && (xlen & 3) != 0 {
             circle_distance = calculate_rounding_blend(
                 circle_y2,
                 rounding_x_current,
@@ -437,7 +438,7 @@ fn render_internal<
                 border_radius_v,
             );
         }
-
+            
         // Process the remaining pixels
         match xlen & 3 {
             1 => {
@@ -599,12 +600,13 @@ impl Raster {
 
         // First caluclate how large the corners has to be
         let corner_size = radius.ceil();
+        let corner_exp = corner_size + 4.0;
 
         let upper_left_coords = [
             coords[0],
             coords[1],
-            coords[0] + corner_size,
-            coords[1] + corner_size,
+            coords[0] + corner_exp,
+            coords[1] + corner_exp,
         ];
 
         // We first render all the corners as the icache has is warm with this code and the
@@ -620,10 +622,10 @@ impl Raster {
         );
 
         let upper_right_coords = [
-            coords[2] - corner_size,
+            coords[2] - corner_exp,
             coords[1],
             coords[2],
-            coords[1] + corner_size,
+            coords[1] + corner_exp,
         ];
 
         Self::render_soild_rounded_corner(
@@ -637,8 +639,8 @@ impl Raster {
         );
 
         let lower_right_coords = [
-            coords[2] - corner_size,
-            coords[3] - corner_size,
+            coords[2] - corner_exp,
+            coords[3] - corner_exp,
             coords[2],
             coords[3],
         ];
@@ -655,8 +657,8 @@ impl Raster {
 
         let lower_left_coords = [
             coords[0],
-            coords[3] - corner_size,
-            coords[0] + corner_size,
+            coords[3] - corner_exp,
+            coords[0] + corner_exp,
             coords[3],
         ];
 
@@ -672,19 +674,19 @@ impl Raster {
 
         // Now we render the sides
         let top_coords = [
-            coords[0] + corner_size,
+            coords[0] + corner_exp,
             coords[1],
-            coords[2] - corner_size,
-            coords[1] + corner_size,
+            coords[2] - corner_exp,
+            coords[1] + corner_exp,
         ];
 
         Self::render_solid_quad(output, tile_info, &top_coords, color, blend_mode);
-
+        
         let bottom_coords = [
-            coords[0] + corner_size,
-            coords[3] - corner_size,
-            coords[2] - corner_size,
-            coords[3],
+            coords[0] + corner_exp,
+            coords[3] - corner_exp,
+            coords[2] - corner_exp,
+            coords[3] - 2.0,
         ];
 
         Self::render_solid_quad(output, tile_info, &bottom_coords, color, blend_mode);
@@ -692,7 +694,7 @@ impl Raster {
         let left_coords = [
             coords[0],
             coords[1] + corner_size,
-            coords[2],
+            coords[2] - 2.0,
             coords[3] - corner_size,
         ];
 

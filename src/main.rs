@@ -233,11 +233,11 @@ fn main() {
         let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
         let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
-        let radius = 8.0;
+        let radius = 16.0;
 
         let coords = [
-            16.0 + x_pos,
-            16.0 + x_pos,
+            10.0 + x_pos,
+            10.0 + x_pos,
             100.0 + x_pos,
             100.0 + x_pos,
             1.0,
@@ -327,7 +327,7 @@ fn main() {
 
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
 
-        //y_pos += 0.21;
+        //x_pos += 0.21;
         x_pos += 0.22;
     }
 }
