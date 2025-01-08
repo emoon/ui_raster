@@ -368,8 +368,6 @@ fn render_internal<
     let mut circle_y2 = f32x4::new_splat(0.0);
     let mut circle_distance = i16x8::new_splat(0);
 
-    dbg!(x0y0x1y1.extract::<0>());
-
     for _y in 0..ylen {
         // as y2 for the circle is constant in the inner loop we can calculate it here
         if ROUND_MODE == ROUND_MODE_ENABLED {
