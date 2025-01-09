@@ -363,12 +363,15 @@ fn render_internal<
 
         // TODO: Get the corret corner direction
         rounding_y_step = f32x4::new_splat(1.0);
-        rounding_x_step = f32x4::new(4.0, 4.0, 4.0, 4.0);
-        rounding_y_current = f32x4::new_splat(x0y0x1y1.extract::<1>());
+        rounding_x_step = f32x4::new_splat(4.0);
+        rounding_y_current = f32x4::new_splat(clip_diff.extract::<1>() as f32);
+
+        let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1);
+
+        // TODO: Optimize 
         border_radius_v = f32x4::new_splat(border_radius);
-        // TODO: Fixme
-        circle_center_x = f32x4::new_splat(x0f + border_radius * center_adjust.0);
-        circle_center_y = f32x4::new_splat(y0f + border_radius * center_adjust.1);
+        circle_center_x = f32x4::new_splat(uv_fraction.extract::<0>() + (border_radius * center_adjust.0));
+        circle_center_y = f32x4::new_splat(uv_fraction.extract::<1>() + (border_radius * center_adjust.1));
     }
 
     let min_box = x0y0x1y1_int.min(scissor_rect);
@@ -403,11 +406,10 @@ fn render_internal<
     for _y in 0..ylen {
         // as y2 for the circle is constant in the inner loop we can calculate it here
         if ROUND_MODE == ROUND_MODE_ENABLED {
-            let x0f = x0y0x1y1.extract::<0>();
-
             let t0 = rounding_y_current - circle_center_y;
             circle_y2 = t0 * t0;
-            rounding_x_current = f32x4::new(x0f, x0f + 1.0, x0f + 2.0, x0f + 3.0);
+            let x_start = clip_diff.extract::<0>() as f32;
+            rounding_x_current = f32x4::new(x_start, x_start + 1.0, x_start + 2.0, x_start + 3.0);
         }
 
         if COLOR_MODE == COLOR_MODE_LERP {
