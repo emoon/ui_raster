@@ -307,6 +307,7 @@ fn main() {
         );
         */
 
+        /*
         raster::Raster::render_solid_quad_rounded(
             &mut output,
             &tile_info_2,
@@ -315,6 +316,7 @@ fn main() {
             radius,
             raster::BlendMode::None,
         );
+        */
 
         copy_tile_to_output_buffer(
             &mut buffer,

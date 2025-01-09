@@ -1,8 +1,8 @@
 #[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
 
-#[cfg(target_arch = "aarch64")]
-use std::arch::asm;
+//#[cfg(target_arch = "aarch64")]
+//use std::arch::asm;
 
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
@@ -286,38 +286,21 @@ impl f32x4 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn test_intersect(a: f32x4, b: f32x4) -> bool {
-        /*
         unsafe {
-            // Negate B (0.0 - b)
-            let neg_b = vnegq_f32(b.v);
+            let mask = vld1q_u32(&[0x00000000u32, 0x00000000, 0x80000000, 0x80000000] as *const u32);
+            let a = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(a.v), mask));
+            let b = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(b.v), mask));
 
-            // Shuffle AABB `a` to align max/min with negated `b` (shuffle: [min_y, min_x, max_y, max_x])
-            let shuffled_a = vrev64q_f32(a.v);
+            let b = vextq_f32(b, b, 2);
+            let flip_sign = vreinterpretq_u32_f32(vdupq_n_f32(-0.0));
+            let b = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(b), flip_sign));
 
-            // Check overlap: compare shuffled `a` <= negated `b`
-            let cmp = vcleq_f32(shuffled_a, neg_b);
+            let cmp = vcltq_f32(a, b);
 
-            // Test if all comparison results are true
-            vgetq_lane_u32(vreinterpretq_u32_f32(cmp), 0) != 0
-        }
-        */
-
-        unsafe {
-            // Negate `b` (0.0 - b)
-            let zero = vdupq_n_f32(0.0); // Vector of 0.0
-            let neg_b = vsubq_f32(zero, b); // Negated `b`
-
-            // Shuffle `a` to align max/min with negated `b` (shuffle: [min_y, min_x, max_y, max_x])
-            let shuffled_a = vcombine_f32(vget_high_f32(a), vget_low_f32(a));
-
-            // Compare shuffled `a` <= negated `b`
-            let cmp = vcleq_f32(shuffled_a, neg_b);
-
-            // Test if all comparison results are true
-            // Use bitwise AND reduction across all lanes
-            vminvq_u32(vreinterpretq_u32_f32(cmp)) == 0xFFFFFFFF
+            vmaxvq_u32(cmp) == 0
         }
     }
+
 
     #[cfg(any(test, debug_assertions))]
     pub fn to_array(self) -> [f32; 4] {
@@ -397,7 +380,7 @@ impl i16x8 {
     #[cfg(target_arch = "aarch64")]
     pub fn store_unaligned_ptr_lower(self, data: *mut i16) {
         unsafe {
-            vst1q_s16(data, vget_low_s16(self.v));
+            vst1_s16(data, vget_low_s16(self.v));
         }
     }
 
@@ -630,6 +613,24 @@ impl i16x8 {
             // pshuflw xmm0, xmm0, 245
             let temp = _mm_shufflelo_epi16(self.v, 245);
             let v = _mm_shuffle_epi32(temp, 80);
+            Self { v }
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn shuffle_3333_7777(self) -> Self {
+        let data = [
+            6, 7, 6, 7, 6, 7, 6, 7, 14, 15, 14, 15, 14, 15, 14, 15,
+        ];
+
+        Self::tablebased_shuffle(self, self, data)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn shuffle_3333_7777() -> Self {
+        unsafe {
+            let temp = _mm_shufflehi_epi16(self.v, 245);
+            let v = _mm_shuffle_epi32(temp, 250);
             Self { v }
         }
     }
@@ -1204,6 +1205,19 @@ impl Mul for i16x8 {
 impl AddAssign for i16x8 {
     fn add_assign(&mut self, rhs: Self) {
         *self = self.add(rhs);
+    }
+}
+
+impl Sub for i32x4 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            #[cfg(target_arch = "aarch64")]
+            v: unsafe { vsubq_s32(self.v, rhs.v) },
+            #[cfg(target_arch = "x86_64")]
+            v: unsafe { _mm_sub_epi32(self.v, rhs.v) },
+        }
     }
 }
 

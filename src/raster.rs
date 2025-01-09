@@ -229,13 +229,13 @@ fn process_pixels<
     // Blend between color and the background 
     if BLEND_MODE == BLEND_MODE_BG_COLOR {
         if COUNT >= PIXEL_COUNT_3 {
-            let bg_color_0 = i16x8::load_unaligned_ptr_lower(output);
-            let bg_color_1 = i16x8::load_unaligned_ptr_lower(unsafe { output.add(8) });
+            let bg_color_0 = i16x8::load_unaligned_ptr(output);
+            let bg_color_1 = i16x8::load_unaligned_ptr(unsafe { output.add(8) });
             // Blend between the two colors
             color_0 = blend_color(color_0, bg_color_0);
             color_1 = blend_color(color_1, bg_color_1);
         } else {
-            let bg_color_0 = i16x8::load_unaligned_ptr_lower(output);
+            let bg_color_0 = i16x8::load_unaligned_ptr(output);
             color_0 = blend_color(color_0, bg_color_0);
         }
     }
@@ -263,7 +263,7 @@ fn render_internal<
     const BLEND_MODE: usize,
 >(
     output: &mut [i16],
-    scissor_rect: f32x4,
+    scissor_rect: i32x4,
     texture_data: *const i16,
     tile_info: &TileInfo,
     uv_data: &[f32],
@@ -311,7 +311,7 @@ fn render_internal<
         fixed_u_fraction = uv_fraction.splat_0000_0000();
         fixed_v_fraction = uv_fraction.splat_2222_2222();
 
-        texture_width = texture_sizes.extract::<0>() as usize;
+        texture_width = texture_sizes[0] as usize;
 
         let u = uv_i.extract::<0>() as usize;
         let v = uv_i.extract::<1>() as usize;
@@ -542,16 +542,17 @@ fn render_internal<
 
 impl Raster {
     pub fn set_scissor_rect(&mut self, rect: i32x4) { 
-        self.scissor_org = self.sissor_rect; 
-        self.sissor_rect = rect;
+        self.scissor_org = self.scissor_rect;
+        self.scissor_rect = rect;
     }
 
     pub fn scissor_disable(&mut self) {
-        self.scissor_rect = self.sissor_org;
+        self.scissor_rect = self.scissor_org;
     }
 
     #[inline(never)]
     pub fn render_aligned_texture(
+        scissor_rect: i32x4,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -561,6 +562,7 @@ impl Raster {
     ) {
         render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_ALIGNED, ROUND_MODE_NONE, BLEND_MODE_NONE>(
             output,
+            scissor_rect,
             texture_data,
             tile_info,
             uv_data,
@@ -574,7 +576,7 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_solid_quad(
+    pub fn render_solid_quad(&self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -588,6 +590,7 @@ impl Raster {
             BlendMode::None => {
                 render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_NONE>(
                     output,
+                    self.scissor_rect,
                     std::ptr::null(),
                     tile_info,
                     &uv_data,
@@ -602,6 +605,7 @@ impl Raster {
             BlendMode::WithBackground => {
                 render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_BG_COLOR>(
                     output,
+                    self.scissor_rect,
                     std::ptr::null(),
                     tile_info,
                     &uv_data,
@@ -618,13 +622,13 @@ impl Raster {
     }
 
     #[inline(never)]
-    fn render_soild_rounded_corner(
+    fn render_soild_rounded_corner(&self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
         color: i16x8,
         radius: f32,
-        blend_mode: BlendMode,
+        _blend_mode: BlendMode,
         corner: Corner,
     ) {
         let uv_data = [0.0];
@@ -632,6 +636,7 @@ impl Raster {
 
         render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_NONE, ROUND_MODE_ENABLED, BLEND_MODE_NONE>(
             output,
+            self.scissor_rect,
             std::ptr::null(),
             tile_info,
             &uv_data,
@@ -704,7 +709,7 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_solid_quad_rounded(
+    pub fn render_solid_quad_rounded(&self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -725,7 +730,7 @@ impl Raster {
 
         for corner in &corners { 
             let corner_coords = Self::get_corner_coords(*corner, coords, radius);
-            Self::render_soild_rounded_corner(
+            self.render_soild_rounded_corner(
                 output,
                 tile_info,
                 &corner_coords,
@@ -738,12 +743,12 @@ impl Raster {
 
         for side in 0..3 {
             let side_coords = Self::get_side_coords(side, coords, radius);
-            Self::render_solid_quad(output, tile_info, &side_coords, color, blend_mode);
+            self.render_solid_quad(output, tile_info, &side_coords, color, blend_mode);
         }
     }
 
     #[inline(never)]
-    pub fn render_solid_lerp_radius(
+    pub fn render_solid_lerp_radius(&self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -756,6 +761,7 @@ impl Raster {
 
         render_internal::<COLOR_MODE_LERP, TEXTURE_MODE_NONE, ROUND_MODE_ENABLED, BLEND_MODE_NONE>(
             output,
+            self.scissor_rect,
             std::ptr::null(),
             tile_info,
             &uv_data,
