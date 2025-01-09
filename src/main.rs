@@ -206,6 +206,8 @@ fn main() {
     let mut x_pos = 0.0;
     let mut size = 0.0;
 
+    let raster = raster::Raster::new(simd::i32x4::new(0, 0, tile_width as _, tile_height as _));
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in output.iter_mut() {
             *i = 0;

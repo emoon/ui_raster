@@ -541,6 +541,13 @@ fn render_internal<
 }
 
 impl Raster {
+    pub fn new(scissor_rect: i32x4) -> Self {
+        Self {
+            scissor_rect,
+            scissor_org: i32x4::new_splat(0),
+        }
+    }
+
     pub fn set_scissor_rect(&mut self, rect: i32x4) { 
         self.scissor_org = self.scissor_rect;
         self.scissor_rect = rect;
