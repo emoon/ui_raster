@@ -47,10 +47,10 @@ const CORNER_OFFSETS: [(f32, f32); 4] = [
 
 #[derive(Copy, Clone)]
 pub enum BlendMode {
-    None = BLEND_MODE_NONE,
-    WithBackground = BLEND_MODE_BG_COLOR,
-    WithTexture = BLEND_MODE_TEXTURE_COLOR,
-    WithBackgroundAndTexture = BLEND_MODE_BG_TEXTURE_COLOR, 
+    None = BLEND_MODE_NONE as _,
+    WithBackground = BLEND_MODE_BG_COLOR as _,
+    WithTexture = BLEND_MODE_TEXTURE_COLOR as _,
+    WithBackgroundAndTexture = BLEND_MODE_BG_TEXTURE_COLOR as _, 
 }
 
 /// Calculates the blending factor for rounded corners in vectorized form.
@@ -227,7 +227,7 @@ fn process_pixels<
     }
 
     // Blend between color and the background 
-    if BLEND_MODE == BLEND_MODE_COLOR_BG {
+    if BLEND_MODE == BLEND_MODE_BG_COLOR {
         if COUNT >= PIXEL_COUNT_3 {
             let bg_color_0 = i16x8::load_unaligned_ptr_lower(output);
             let bg_color_1 = i16x8::load_unaligned_ptr_lower(unsafe { output.add(8) });
@@ -371,8 +371,8 @@ fn render_internal<
         circle_center_y = f32x4::new_splat(y0f + border_radius * center_adjust.1);
     }
 
-    let min_box = x0y0x1y1_int.min(sissor_rect);
-    let max_box = x0y0x1y1_int.max(sissor_rect);
+    let min_box = x0y0x1y1_int.min(scissor_rect);
+    let max_box = x0y0x1y1_int.max(scissor_rect);
 
     let x0 = max_box.extract::<0>(); 
     let y0 = max_box.extract::<1>(); 
@@ -579,46 +579,42 @@ impl Raster {
         tile_info: &TileInfo,
         coords: &[f32],
         color: i16x8,
+        blend_mode: BlendMode,
     ) {
         let uv_data = [0.0];
         let texture_sizes = [0];
 
-        render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_NONE>(
-            output,
-            std::ptr::null(),
-            tile_info,
-            &uv_data,
-            &texture_sizes,
-            coords,
-            0.0,
-            0,
-            color,
-            color,
-        );
-    }
-
-    #[inline(never)]
-    pub fn render_solid_quad_blend(
-        output: &mut [i16],
-        tile_info: &TileInfo,
-        coords: &[f32],
-        color: i16x8,
-    ) {
-        let uv_data = [0.0];
-        let texture_sizes = [0];
-
-        render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_COLOR_BG>(
-            output,
-            std::ptr::null(),
-            tile_info,
-            &uv_data,
-            &texture_sizes,
-            coords,
-            0.0,
-            0,
-            color,
-            color,
-        );
+        match blend_mode {
+            BlendMode::None => {
+                render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_NONE>(
+                    output,
+                    std::ptr::null(),
+                    tile_info,
+                    &uv_data,
+                    &texture_sizes,
+                    coords,
+                    0.0,
+                    0,
+                    color,
+                    color,
+                );
+            }
+            BlendMode::WithBackground => {
+                render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_BG_COLOR>(
+                    output,
+                    std::ptr::null(),
+                    tile_info,
+                    &uv_data,
+                    &texture_sizes,
+                    coords,
+                    0.0,
+                    0,
+                    color,
+                    color,
+                );
+            }
+            _ => unimplemented!(),
+        }
     }
 
     #[inline(never)]
