@@ -324,14 +324,9 @@ fn render_internal<
         texture_ptr = unsafe { texture_ptr.add((v * texture_width + u) * 4) };
     }
 
-    let x0 = x0y0x1y1_int.extract::<0>();
-    let y0 = x0y0x1y1_int.extract::<1>();
-    let x1 = x0y0x1y1_int.extract::<2>();
-    let y1 = x0y0x1y1_int.extract::<3>();
-
     // Calculate the difference between the scissor rect and the current rect
     // if diff is > 0 we return back a positive value to use for clipping
-    let mut clip_diff = (x0y0x1y1_int - scissor_rect).min(i32x4::new_splat(0)).abs();
+    let clip_diff = (x0y0x1y1_int - scissor_rect).min(i32x4::new_splat(0)).abs();
 
     if COLOR_MODE == COLOR_MODE_LERP {
         let x0y0x0y0 = x0y0x1y1.shuffle_0101();
@@ -388,16 +383,13 @@ fn render_internal<
     let xlen = x1 - x0;
 
     let tile_width = tile_info.width as usize;
-    let current_color = i16x8::new_splat(0);
     let output = &mut output[((y0 as usize * tile_width + x0 as usize) * 4)..];
     let mut output_ptr = output.as_mut_ptr();
 
-    let mut current_color = top_colors;
+    let current_color = top_colors;
     let mut color_diff = i16x8::new_splat(0);
     let mut color_top_bottom_diff = i16x8::new_splat(0);
     let mut left_colors = i16x8::new_splat(0);
-    let mut right_colors = i16x8::new_splat(0);
-    let mut x_step_current = i16x8::new_splat(0);
 
     if COLOR_MODE == COLOR_MODE_LERP {
         color_top_bottom_diff = bottom_colors - top_colors;
@@ -420,12 +412,12 @@ fn render_internal<
 
         if COLOR_MODE == COLOR_MODE_LERP {
             let left_right_colors = i16x8::lerp_diff(top_colors, color_top_bottom_diff, yi_start);
+            let right_colors = left_right_colors.shuffle_4567_4567();
             left_colors = left_right_colors.shuffle_0123_0123();
-            right_colors = left_right_colors.shuffle_4567_4567();
             color_diff = right_colors - left_colors;
         }
 
-        x_step_current = xi_start;
+        let mut x_step_current = xi_start;
 
         for _x in 0..(xlen >> 2) {
             // Calculate the distance to the circle center
@@ -729,16 +721,10 @@ impl Raster {
         radius: f32,
         blend_mode: BlendMode,
     ) {
-        let uv_data = [0.0];
-        let texture_sizes = [0];
         let corners = [Corner::TopLeft, Corner::TopRight, Corner::BottomRight, Corner::BottomLeft];
 
         // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
         let color = premultiply_alpha(color);
-
-        // First caluclate how large the corners has to be
-        let corner_size = radius.ceil();
-        let corner_exp = corner_size + 4.0;
 
         for corner in &corners { 
             let corner_coords = Self::get_corner_coords(*corner, coords, radius);

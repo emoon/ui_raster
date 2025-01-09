@@ -185,7 +185,7 @@ fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
-    let texture = read_texture("assets/uv.png", &srgb_to_linear);
+    //let texture = read_texture("assets/uv.png", &srgb_to_linear);
     //let texture = generate_test_texture(&srgb_to_linear);
 
     let tile_width = 1280;
@@ -210,9 +210,9 @@ fn main() {
     // Limit to max ~60 fps update rate
     window.set_target_fps(60);
 
-    let mut y_pos = 0.0;
+    //let mut y_pos = 0.0;
     let mut x_pos = 0.0;
-    let mut size = 0.0;
+    //let mut size = 0.0;
 
     let clip_rect = [50, 50, 200, 200];
 
@@ -242,9 +242,9 @@ fn main() {
         let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
         let top_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
-        let t0 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
-        let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
-        let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
+        //let t0 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
+        //let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
+        //let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
         let radius = 8.0;
 
@@ -273,6 +273,7 @@ fn main() {
         }
         */
 
+        /*
         let uv_coords = [0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
         let texture_sizes = [
@@ -285,6 +286,7 @@ fn main() {
             texture.width as i32,
             texture.height as i32,
         ];
+        */
 
         /*
         unsafe {
