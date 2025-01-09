@@ -214,7 +214,10 @@ fn main() {
     let mut x_pos = 0.0;
     let mut size = 0.0;
 
-    let raster = raster::Raster::new(simd::i32x4::new(0, 0, tile_width as _, tile_height as _));
+    let clip_rect = [50, 50, 200, 200];
+
+    let raster = raster::Raster::new(
+        simd::i32x4::new(clip_rect[0], clip_rect[1], clip_rect[2], clip_rect[3]));
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in output.iter_mut() {
@@ -327,10 +330,10 @@ fn main() {
         );
 
         let coords = [
-            0.0,
-            0.0,
-            200.0,
-            200.0,
+            clip_rect[0] as f32,
+            clip_rect[1] as f32,
+            clip_rect[2] as f32,
+            clip_rect[3] as f32,
         ];
 
         raster.render_solid_quad(

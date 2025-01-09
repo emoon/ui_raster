@@ -279,6 +279,11 @@ fn render_internal<
     let x0y0x1y1 = x0y0x1y1_adjust.floor();
     let x0y0x1y1_int = x0y0x1y1.as_i32x4();
 
+    // Make sure we intersect with the scissor rect otherwise skip rendering
+    if !i32x4::test_intersect(scissor_rect, x0y0x1y1_int) {
+        return;
+    }
+
     // Used for stepping for edges with radius
     let mut rounding_y_step = f32x4::new_splat(0.0);
     let mut rounding_x_step = f32x4::new_splat(0.0);
