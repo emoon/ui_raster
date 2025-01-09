@@ -1,6 +1,9 @@
 use crate::simd::*;
 
-pub struct Raster;
+pub struct Raster {
+    scissor_rect: i32x4,
+    scissor_org: i32x4,
+}
 
 pub struct TileInfo {
     pub offsets: f32x4,
@@ -20,8 +23,9 @@ const COLOR_MODE_SOLID: usize = 1;
 const COLOR_MODE_LERP: usize = 2;
 
 const BLEND_MODE_NONE: usize = 0;
-const BLEND_MODE_COLOR_BG: usize = 1;
-const BLEND_MODE_TEXTURE_COLOR_BG: usize = 2;
+const BLEND_MODE_BG_COLOR: usize = 1;
+const BLEND_MODE_TEXTURE_COLOR: usize = 2;
+const BLEND_MODE_BG_TEXTURE_COLOR: usize = 3;
 
 const ROUND_MODE_NONE: usize = 0;
 const ROUND_MODE_ENABLED: usize = 1;
@@ -43,11 +47,10 @@ const CORNER_OFFSETS: [(f32, f32); 4] = [
 
 #[derive(Copy, Clone)]
 pub enum BlendMode {
-    None,
-    WithBackground,
-    WithTexture,
-    WithTextureAndBackground,
-    Enabled,
+    None = BLEND_MODE_NONE,
+    WithBackground = BLEND_MODE_BG_COLOR,
+    WithTexture = BLEND_MODE_TEXTURE_COLOR,
+    WithBackgroundAndTexture = BLEND_MODE_BG_TEXTURE_COLOR, 
 }
 
 /// Calculates the blending factor for rounded corners in vectorized form.
@@ -106,6 +109,11 @@ fn sample_aligned_texture(
     let t = t0_t1.rotate_4();
     i16x8::lerp(t0_t1, t, u_fraction)
 }
+
+fn blend_color(source: i16x8, dest: i16x8) -> i16x8 {
+    let one_minus_alpha = i16x8::new_splat(0x7fff) - source.shuffle_3333_7777();
+    i16x8::lerp(source, dest, one_minus_alpha)
+}   
 
 #[inline(always)]
 fn premultiply_alpha(color: i16x8) -> i16x8 {
@@ -199,9 +207,11 @@ fn process_pixels<
         color_1 = tex_1;
     }
 
+    /*
     if BLEND_MODE == BLEND_MODE_TEXTURE_COLOR_BG {
         // TODO: Blend between texture and color
     }
+    */
 
     // If we have rounded we need to adjust the color based on the distance to the circle center
     if ROUND_MODE == ROUND_MODE_ENABLED {
@@ -216,6 +226,20 @@ fn process_pixels<
         }
     }
 
+    // Blend between color and the background 
+    if BLEND_MODE == BLEND_MODE_COLOR_BG {
+        if COUNT >= PIXEL_COUNT_3 {
+            let bg_color_0 = i16x8::load_unaligned_ptr_lower(output);
+            let bg_color_1 = i16x8::load_unaligned_ptr_lower(unsafe { output.add(8) });
+            // Blend between the two colors
+            color_0 = blend_color(color_0, bg_color_0);
+            color_1 = blend_color(color_1, bg_color_1);
+        } else {
+            let bg_color_0 = i16x8::load_unaligned_ptr_lower(output);
+            color_0 = blend_color(color_0, bg_color_0);
+        }
+    }
+    
     match COUNT {
         PIXEL_COUNT_1 => color_0.store_unaligned_ptr_lower(output),
         PIXEL_COUNT_2 => color_0.store_unaligned_ptr(output),
@@ -231,7 +255,6 @@ fn process_pixels<
     }
 }
 
-#[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn render_internal<
     const COLOR_MODE: usize,
@@ -240,6 +263,7 @@ fn render_internal<
     const BLEND_MODE: usize,
 >(
     output: &mut [i16],
+    scissor_rect: f32x4,
     texture_data: *const i16,
     tile_info: &TileInfo,
     uv_data: &[f32],
@@ -277,8 +301,8 @@ fn render_internal<
     let mut texture_width = 0;
 
     if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-        let texture_sizes = i32x4::load_unaligned(texture_sizes);
-        let uv = f32x4::load_unaligned(uv_data) * texture_sizes.as_f32x4();
+        // For aligned data we assume that UVs are in texture space range and not normalized
+        let uv = f32x4::load_unaligned(uv_data);
         let uv_i = uv.as_i32x4();
 
         let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1) * f32x4::new_splat(0x7fff as f32);
@@ -300,6 +324,10 @@ fn render_internal<
     let x1 = x0y0x1y1_int.extract::<2>();
     let y1 = x0y0x1y1_int.extract::<3>();
 
+    // Calculate the difference between the scissor rect and the current rect
+    // if diff is > 0 we return back a positive value to use for clipping
+    let mut clip_diff = (x0y0x1y1_int - scissor_rect).min(i32x4::new_splat(0)).abs();
+
     if COLOR_MODE == COLOR_MODE_LERP {
         let x0y0x0y0 = x0y0x1y1.shuffle_0101();
         let x1y1x1y1 = x0y0x1y1.shuffle_2323();
@@ -307,17 +335,21 @@ fn render_internal<
         let xy_diff = x1y1x1y1 - x0y0x0y0;
         let xy_step = f32x4::new_splat(32767.0) / xy_diff;
 
-        let x0_i = if x0 < 0 { -x0 } else { 1 };
-        let y0_i = if y0 < 0 { -y0 } else { 1 };
-
-        xi_step = xy_step.as_i32x4().as_i16x8().splat_0000_0000() * i16x8::new_splat(x0_i as _);
-        yi_step = xy_step.as_i32x4().as_i16x8().splat_2222_2222() * i16x8::new_splat(y0_i as _);
+        xi_step = xy_step.as_i32x4().as_i16x8().splat_0000_0000();
+        yi_step = xy_step.as_i32x4().as_i16x8().splat_2222_2222();
 
         // The way we step across x is that we do two pixels at a time. Because of this we need
         // to adjust the stepping value to be times two and then adjust the starting value so that
         // is like this:
         // start: 0,1
         // step:  2,2
+
+        let clip_x0 = clip_diff.as_i16x8().splat_0000_0000();
+        let clip_y0 = clip_diff.as_i16x8().splat_2222_2222();
+        
+        xi_start = xi_step * clip_x0;
+        yi_start = yi_step * clip_y0;
+
         xi_start += xi_step * i16x8::new(0, 0, 0, 0, 1, 1, 1, 1);
         xi_step = xi_step * i16x8::new_splat(2);
     }
@@ -339,10 +371,13 @@ fn render_internal<
         circle_center_y = f32x4::new_splat(y0f + border_radius * center_adjust.1);
     }
 
-    let x0 = x0.max(0);
-    let y0 = y0.max(0);
-    let x1 = x1.min(tile_info.width);
-    let y1 = y1.min(tile_info.height);
+    let min_box = x0y0x1y1_int.min(sissor_rect);
+    let max_box = x0y0x1y1_int.max(sissor_rect);
+
+    let x0 = max_box.extract::<0>(); 
+    let y0 = max_box.extract::<1>(); 
+    let x1 = min_box.extract::<2>(); 
+    let y1 = min_box.extract::<3>();
 
     let ylen = y1 - y0;
     let xlen = x1 - x0;
@@ -506,6 +541,15 @@ fn render_internal<
 }
 
 impl Raster {
+    pub fn set_scissor_rect(&mut self, rect: i32x4) { 
+        self.scissor_org = self.sissor_rect; 
+        self.sissor_rect = rect;
+    }
+
+    pub fn scissor_disable(&mut self) {
+        self.scissor_rect = self.sissor_org;
+    }
+
     #[inline(never)]
     pub fn render_aligned_texture(
         output: &mut [i16],
@@ -535,12 +579,35 @@ impl Raster {
         tile_info: &TileInfo,
         coords: &[f32],
         color: i16x8,
-        blend_mode: BlendMode,
     ) {
         let uv_data = [0.0];
         let texture_sizes = [0];
 
         render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_NONE>(
+            output,
+            std::ptr::null(),
+            tile_info,
+            &uv_data,
+            &texture_sizes,
+            coords,
+            0.0,
+            0,
+            color,
+            color,
+        );
+    }
+
+    #[inline(never)]
+    pub fn render_solid_quad_blend(
+        output: &mut [i16],
+        tile_info: &TileInfo,
+        coords: &[f32],
+        color: i16x8,
+    ) {
+        let uv_data = [0.0];
+        let texture_sizes = [0];
+
+        render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_COLOR_BG>(
             output,
             std::ptr::null(),
             tile_info,
@@ -581,6 +648,65 @@ impl Raster {
         );
     }
 
+    fn get_corner_coords(corner: Corner, coords: &[f32], radius: f32) -> [f32; 4] {
+        let corner_size = radius.ceil();
+        let corner_exp = corner_size + 4.0;
+
+        match corner {
+            Corner::TopLeft => [
+                coords[0],
+                coords[1],
+                coords[0] + corner_exp,
+                coords[1] + corner_exp,
+            ],
+            Corner::TopRight => [
+                coords[2] - corner_exp,
+                coords[1],
+                coords[2],
+                coords[1] + corner_exp,
+            ],
+            Corner::BottomRight => [
+                coords[0],
+                coords[3] - corner_exp,
+                coords[0] + corner_exp,
+                coords[3],
+            ],
+            Corner::BottomLeft => [
+                coords[2] - corner_exp,
+                coords[3] - corner_exp,
+                coords[2],
+                coords[3],
+            ],
+        }
+    }
+
+    fn get_side_coords(side: usize, coords: &[f32], radius: f32) -> [f32; 4] {
+        let corner_size = radius.ceil();
+        let corner_exp = corner_size + 4.0;
+
+        match side & 3 {
+            0 => [
+                coords[0] + corner_exp,
+                coords[1],
+                coords[2] - corner_exp,
+                coords[1] + corner_exp,
+            ],
+            1 => [
+                coords[0] + corner_exp,
+                coords[3] - corner_exp,
+                coords[2] - corner_exp,
+                coords[3] - 2.0,
+            ],
+            2 => [
+                coords[0],
+                coords[1] + corner_size,
+                coords[2] - 2.0,
+                coords[3] - corner_size,
+            ],
+            _ => unimplemented!(),
+        }
+    }
+
     #[inline(never)]
     pub fn render_solid_quad_rounded(
         output: &mut [i16],
@@ -592,6 +718,7 @@ impl Raster {
     ) {
         let uv_data = [0.0];
         let texture_sizes = [0];
+        let corners = [Corner::TopLeft, Corner::TopRight, Corner::BottomRight, Corner::BottomLeft];
 
         // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
         let color = premultiply_alpha(color);
@@ -600,103 +727,23 @@ impl Raster {
         let corner_size = radius.ceil();
         let corner_exp = corner_size + 4.0;
 
-        let upper_left_coords = [
-            coords[0],
-            coords[1],
-            coords[0] + corner_exp,
-            coords[1] + corner_exp,
-        ];
+        for corner in &corners { 
+            let corner_coords = Self::get_corner_coords(*corner, coords, radius);
+            Self::render_soild_rounded_corner(
+                output,
+                tile_info,
+                &corner_coords,
+                color,
+                radius,
+                blend_mode,
+                *corner,
+            );
+        }
 
-        // We first render all the corners as the icache has is warm with this code and the
-        // branches we have should be predicted the same for all the corners.
-        Self::render_soild_rounded_corner(
-            output,
-            tile_info,
-            &upper_left_coords,
-            color,
-            radius,
-            blend_mode,
-            Corner::TopLeft,
-        );
-
-        let upper_right_coords = [
-            coords[2] - corner_exp,
-            coords[1],
-            coords[2],
-            coords[1] + corner_exp,
-        ];
-
-        Self::render_soild_rounded_corner(
-            output,
-            tile_info,
-            &upper_right_coords,
-            color,
-            radius,
-            blend_mode,
-            Corner::TopRight,
-        );
-
-        let lower_right_coords = [
-            coords[2] - corner_exp,
-            coords[3] - corner_exp,
-            coords[2],
-            coords[3],
-        ];
-
-        Self::render_soild_rounded_corner(
-            output,
-            tile_info,
-            &lower_right_coords,
-            color,
-            radius,
-            blend_mode,
-            Corner::BottomLeft,
-        );
-
-        let lower_left_coords = [
-            coords[0],
-            coords[3] - corner_exp,
-            coords[0] + corner_exp,
-            coords[3],
-        ];
-
-        Self::render_soild_rounded_corner(
-            output,
-            tile_info,
-            &lower_left_coords,
-            color,
-            radius,
-            blend_mode,
-            Corner::BottomRight,
-        );
-
-        // Now we render the sides
-        let top_coords = [
-            coords[0] + corner_exp,
-            coords[1],
-            coords[2] - corner_exp,
-            coords[1] + corner_exp,
-        ];
-
-        Self::render_solid_quad(output, tile_info, &top_coords, color, blend_mode);
-        
-        let bottom_coords = [
-            coords[0] + corner_exp,
-            coords[3] - corner_exp,
-            coords[2] - corner_exp,
-            coords[3] - 2.0,
-        ];
-
-        Self::render_solid_quad(output, tile_info, &bottom_coords, color, blend_mode);
-
-        let left_coords = [
-            coords[0],
-            coords[1] + corner_size,
-            coords[2] - 2.0,
-            coords[3] - corner_size,
-        ];
-
-        Self::render_solid_quad(output, tile_info, &left_coords, color, blend_mode);
+        for side in 0..3 {
+            let side_coords = Self::get_side_coords(side, coords, radius);
+            Self::render_solid_quad(output, tile_info, &side_coords, color, blend_mode);
+        }
     }
 
     #[inline(never)]

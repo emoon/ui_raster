@@ -189,7 +189,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X4,
             ..WindowOptions::default()
         },
     )

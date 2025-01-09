@@ -36,6 +36,7 @@ pub struct i16x8 {
     pub v: __m128i,
 }
 
+/*
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 struct f16x8 {
@@ -46,6 +47,7 @@ struct f16x8 {
     #[cfg(target_arch = "x86_64")]
     v1: f32x4,
 }
+*/
 
 impl f32x4 {
     #[cfg(target_arch = "aarch64")]
@@ -860,6 +862,20 @@ impl i32x4 {
             v: unsafe { _mm_max_epi32(self.v, rhs.v) },
         }
     }
+    
+    #[cfg(target_arch = "aarch64")]
+    pub fn abs(self) -> Self {
+        Self {
+            v: unsafe { vabsq_s32(self.v) },
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn abs(self) -> Self {
+        Self {
+            v: unsafe { _mm_abs_epi32(self.v) },
+        }
+    }
 
     #[cfg(target_arch = "aarch64")]
     pub fn extract<const LANE: i32>(self) -> i32 {
@@ -918,6 +934,7 @@ impl i32x4 {
     }
 }
 
+/*
 impl f16x8 {
     #[cfg(target_arch = "aarch64")]
     #[allow(clippy::too_many_arguments)]
@@ -1100,6 +1117,7 @@ impl f16x8 {
         result
     }
 }
+*/
 
 impl Sub for f32x4 {
     type Output = Self;
