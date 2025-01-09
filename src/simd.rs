@@ -286,7 +286,6 @@ impl f32x4 {
         }
     }
 
-
     #[cfg(any(test, debug_assertions))]
     pub fn to_array(self) -> [f32; 4] {
         #[cfg(target_arch = "aarch64")]
@@ -604,9 +603,7 @@ impl i16x8 {
 
     #[cfg(target_arch = "aarch64")]
     pub fn shuffle_3333_7777(self) -> Self {
-        let data = [
-            6, 7, 6, 7, 6, 7, 6, 7, 14, 15, 14, 15, 14, 15, 14, 15,
-        ];
+        let data = [6, 7, 6, 7, 6, 7, 6, 7, 14, 15, 14, 15, 14, 15, 14, 15];
 
         Self::tablebased_shuffle(self, self, data)
     }
@@ -614,7 +611,9 @@ impl i16x8 {
     #[cfg(target_arch = "x86_64")]
     pub fn shuffle_3333_7777(self) -> Self {
         unsafe {
-            Self { v :_mm_shufflehi_epi16(_mm_shufflelo_epi16(self.v, 0xFF), 0xFF) }
+            Self {
+                v: _mm_shufflehi_epi16(_mm_shufflelo_epi16(self.v, 0xFF), 0xFF),
+            }
         }
     }
 
@@ -846,7 +845,7 @@ impl i32x4 {
             v: unsafe { _mm_max_epi32(self.v, rhs.v) },
         }
     }
-    
+
     #[cfg(target_arch = "aarch64")]
     pub fn abs(self) -> Self {
         Self {
@@ -887,7 +886,8 @@ impl i32x4 {
     #[cfg(target_arch = "aarch64")]
     pub fn test_intersect(a: f32x4, b: f32x4) -> bool {
         unsafe {
-            let mask = vld1q_u32(&[0x00000000u32, 0x00000000, 0x80000000, 0x80000000] as *const u32);
+            let mask =
+                vld1q_u32(&[0x00000000u32, 0x00000000, 0x80000000, 0x80000000] as *const u32);
             let a = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(a.v), mask));
             let b = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(b.v), mask));
 

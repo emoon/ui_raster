@@ -50,7 +50,7 @@ pub enum BlendMode {
     None = BLEND_MODE_NONE as _,
     WithBackground = BLEND_MODE_BG_COLOR as _,
     WithTexture = BLEND_MODE_TEXTURE_COLOR as _,
-    WithBackgroundAndTexture = BLEND_MODE_BG_TEXTURE_COLOR as _, 
+    WithBackgroundAndTexture = BLEND_MODE_BG_TEXTURE_COLOR as _,
 }
 
 /// Calculates the blending factor for rounded corners in vectorized form.
@@ -78,7 +78,7 @@ fn calculate_rounding_blend(
 
     let dist_to_edge =
         f32x4::new_splat(1.0) - dist_to_edge.clamp(f32x4::new_splat(0.0), f32x4::new_splat(1.0));
-    
+
     (dist_to_edge * f32x4::new_splat(32767.0))
         .as_i32x4()
         .as_i16x8()
@@ -113,7 +113,7 @@ fn sample_aligned_texture(
 fn blend_color(source: i16x8, dest: i16x8) -> i16x8 {
     let one_minus_alpha = i16x8::new_splat(0x7fff) - source.shuffle_3333_7777();
     i16x8::lerp(source, dest, one_minus_alpha)
-}   
+}
 
 #[inline(always)]
 fn premultiply_alpha(color: i16x8) -> i16x8 {
@@ -226,7 +226,7 @@ fn process_pixels<
         }
     }
 
-    // Blend between color and the background 
+    // Blend between color and the background
     if BLEND_MODE == BLEND_MODE_BG_COLOR {
         if COUNT >= PIXEL_COUNT_3 {
             let bg_color_0 = i16x8::load_unaligned_ptr(output);
@@ -239,7 +239,7 @@ fn process_pixels<
             color_0 = blend_color(color_0, bg_color_0);
         }
     }
-    
+
     match COUNT {
         PIXEL_COUNT_1 => color_0.store_unaligned_ptr_lower(output),
         PIXEL_COUNT_2 => color_0.store_unaligned_ptr(output),
@@ -346,7 +346,7 @@ fn render_internal<
 
         let clip_x0 = clip_diff.as_i16x8().splat_0000_0000();
         let clip_y0 = clip_diff.as_i16x8().splat_2222_2222();
-        
+
         xi_start = xi_step * clip_x0;
         yi_start = yi_step * clip_y0;
 
@@ -374,9 +374,9 @@ fn render_internal<
     let min_box = x0y0x1y1_int.min(scissor_rect);
     let max_box = x0y0x1y1_int.max(scissor_rect);
 
-    let x0 = max_box.extract::<0>(); 
-    let y0 = max_box.extract::<1>(); 
-    let x1 = min_box.extract::<2>(); 
+    let x0 = max_box.extract::<0>();
+    let y0 = max_box.extract::<1>();
+    let x1 = min_box.extract::<2>();
     let y1 = min_box.extract::<3>();
 
     let ylen = y1 - y0;
@@ -468,7 +468,7 @@ fn render_internal<
                 border_radius_v,
             );
         }
-            
+
         // Process the remaining pixels
         match xlen & 3 {
             1 => {
@@ -545,7 +545,7 @@ impl Raster {
         }
     }
 
-    pub fn set_scissor_rect(&mut self, rect: i32x4) { 
+    pub fn set_scissor_rect(&mut self, rect: i32x4) {
         self.scissor_org = self.scissor_rect;
         self.scissor_rect = rect;
     }
@@ -580,7 +580,8 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_solid_quad(&self,
+    pub fn render_solid_quad(
+        &self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -592,7 +593,12 @@ impl Raster {
 
         match blend_mode {
             BlendMode::None => {
-                render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_NONE>(
+                render_internal::<
+                    COLOR_MODE_SOLID,
+                    TEXTURE_MODE_NONE,
+                    ROUND_MODE_NONE,
+                    BLEND_MODE_NONE,
+                >(
                     output,
                     self.scissor_rect,
                     std::ptr::null(),
@@ -607,7 +613,12 @@ impl Raster {
                 );
             }
             BlendMode::WithBackground => {
-                render_internal::<COLOR_MODE_SOLID, TEXTURE_MODE_NONE, ROUND_MODE_NONE, BLEND_MODE_BG_COLOR>(
+                render_internal::<
+                    COLOR_MODE_SOLID,
+                    TEXTURE_MODE_NONE,
+                    ROUND_MODE_NONE,
+                    BLEND_MODE_BG_COLOR,
+                >(
                     output,
                     self.scissor_rect,
                     std::ptr::null(),
@@ -626,7 +637,8 @@ impl Raster {
     }
 
     #[inline(never)]
-    fn render_soild_rounded_corner(&self,
+    fn render_soild_rounded_corner(
+        &self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -713,7 +725,8 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_solid_quad_rounded(&self,
+    pub fn render_solid_quad_rounded(
+        &self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -721,12 +734,17 @@ impl Raster {
         radius: f32,
         blend_mode: BlendMode,
     ) {
-        let corners = [Corner::TopLeft, Corner::TopRight, Corner::BottomRight, Corner::BottomLeft];
+        let corners = [
+            Corner::TopLeft,
+            Corner::TopRight,
+            Corner::BottomRight,
+            Corner::BottomLeft,
+        ];
 
         // As we use pre-multiplied alpha we need to adjust the color based on the alpha value
         let color = premultiply_alpha(color);
 
-        for corner in &corners { 
+        for corner in &corners {
             let corner_coords = Self::get_corner_coords(*corner, coords, radius);
             self.render_soild_rounded_corner(
                 output,
@@ -746,7 +764,8 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_solid_lerp_radius(&self,
+    pub fn render_solid_lerp_radius(
+        &self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],

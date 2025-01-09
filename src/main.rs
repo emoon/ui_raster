@@ -153,7 +153,6 @@ fn color_from_u8_i16x8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) 
     simd::i16x8::new(r, g, b, (a as i16) << 7, r, g, b, (a as i16) << 7)
 }
 
-
 /*
 fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
     let mut texture = vec![0u16; 512 * 512 * 4];
@@ -216,8 +215,12 @@ fn main() {
 
     let clip_rect = [50, 50, 200, 200];
 
-    let raster = raster::Raster::new(
-        simd::i32x4::new(clip_rect[0], clip_rect[1], clip_rect[2], clip_rect[3]));
+    let raster = raster::Raster::new(simd::i32x4::new(
+        clip_rect[0],
+        clip_rect[1],
+        clip_rect[2],
+        clip_rect[3],
+    ));
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in output.iter_mut() {
