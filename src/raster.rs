@@ -152,7 +152,7 @@ fn multi_sample_aligned_texture<const COUNT: usize>(
         let t1 = sample_aligned_texture(texture, width, u, v, 4);
         let t2 = sample_aligned_texture(texture, width, u, v, 8);
         (i16x8::merge(t0, t1), t2)
-    } else if COUNT == PIXEL_COUNT_3 {
+    } else if COUNT == PIXEL_COUNT_4 {
         let t0 = sample_aligned_texture(texture, width, u, v, 0);
         let t1 = sample_aligned_texture(texture, width, u, v, 4);
         let t2 = sample_aligned_texture(texture, width, u, v, 8);
@@ -637,7 +637,8 @@ impl Raster {
     }
 
     #[inline(never)]
-    fn render_soild_rounded_corner(
+    #[allow(clippy::too_many_arguments)]
+    fn render_solid_rounded_corner(
         &self,
         output: &mut [i16],
         tile_info: &TileInfo,
@@ -746,7 +747,7 @@ impl Raster {
 
         for corner in &corners {
             let corner_coords = Self::get_corner_coords(*corner, coords, radius);
-            self.render_soild_rounded_corner(
+            self.render_solid_rounded_corner(
                 output,
                 tile_info,
                 &corner_coords,

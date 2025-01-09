@@ -96,6 +96,7 @@ struct Texture {
     height: usize,
 }
 
+#[allow(clippy::identity_op)]
 fn read_texture(path: &str, srgb_to_linear: &[u16; 256]) -> Texture {
     let mut decoder = Decoder::new(File::open(path).unwrap());
 
