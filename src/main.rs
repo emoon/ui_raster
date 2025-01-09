@@ -146,6 +146,14 @@ fn color_from_u8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> (i1
     (r, g, b, (a as i16) << 7)
 }
 
+fn color_from_u8_i16x8(srgb_to_linear: &[u16; 256], r: u8, g: u8, b: u8, a: u8) -> simd::i16x8 {
+    let r = srgb_to_linear[r as usize] as i16;
+    let g = srgb_to_linear[g as usize] as i16;
+    let b = srgb_to_linear[b as usize] as i16;
+    simd::i16x8::new(r, g, b, (a as i16) << 7, r, g, b, (a as i16) << 7)
+}
+
+
 /*
 fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
     let mut texture = vec![0u16; 512 * 512 * 4];
@@ -309,8 +317,7 @@ fn main() {
         );
         */
 
-        /*
-        raster::Raster::render_solid_quad_rounded(
+        raster.render_solid_quad_rounded(
             &mut output,
             &tile_info_2,
             &coords,
@@ -318,7 +325,21 @@ fn main() {
             radius,
             raster::BlendMode::None,
         );
-        */
+
+        let coords = [
+            0.0,
+            0.0,
+            200.0,
+            200.0,
+        ];
+
+        raster.render_solid_quad(
+            &mut output,
+            &tile_info_2,
+            &coords,
+            color_from_u8_i16x8(&srgb_to_linear, 255, 0, 0, 127),
+            raster::BlendMode::WithBackground,
+        );
 
         copy_tile_to_output_buffer(
             &mut buffer,

@@ -627,11 +627,9 @@ impl i16x8 {
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn shuffle_3333_7777() -> Self {
+    pub fn shuffle_3333_7777(self) -> Self {
         unsafe {
-            let temp = _mm_shufflehi_epi16(self.v, 245);
-            let v = _mm_shuffle_epi32(temp, 250);
-            Self { v }
+            Self { v :_mm_shufflehi_epi16(_mm_shufflelo_epi16(self.v, 0xFF), 0xFF) }
         }
     }
 
@@ -1707,5 +1705,12 @@ mod simd_tests {
             !f32x4::test_intersect(a, b),
             "AABBs should not overlap (AABB to the bottom-left)"
         );
+    }
+
+    #[test]
+    fn test_i16x8_shuffle_3333_7777() {
+        let vec = i16x8::new(1, 2, 3, 4, 5, 6, 7, 8);
+        let result = vec.shuffle_3333_7777().to_array();
+        assert_eq!(result, [4, 4, 4, 4, 8, 8, 8, 8]);
     }
 }
