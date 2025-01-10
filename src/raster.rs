@@ -639,6 +639,64 @@ impl Raster {
     }
 
     #[inline(never)]
+    pub fn render_gradient_quad(
+        &self,
+        output: &mut [i16],
+        tile_info: &TileInfo,
+        coords: &[f32],
+        color_top: i16x8,
+        color_bottom: i16x8,
+        blend_mode: BlendMode,
+    ) {
+        let uv_data = [0.0];
+        let texture_sizes = [0];
+
+        match blend_mode {
+            BlendMode::None => {
+                render_internal::<
+                    COLOR_MODE_LERP,
+                    TEXTURE_MODE_NONE,
+                    ROUND_MODE_NONE,
+                    BLEND_MODE_NONE,
+                >(
+                    output,
+                    self.scissor_rect,
+                    std::ptr::null(),
+                    tile_info,
+                    &uv_data,
+                    &texture_sizes,
+                    coords,
+                    0.0,
+                    0,
+                    color_top,
+                    color_bottom,
+                );
+            }
+            BlendMode::WithBackground => {
+                render_internal::<
+                    COLOR_MODE_LERP,
+                    TEXTURE_MODE_NONE,
+                    ROUND_MODE_NONE,
+                    BLEND_MODE_BG_COLOR,
+                >(
+                    output,
+                    self.scissor_rect,
+                    std::ptr::null(),
+                    tile_info,
+                    &uv_data,
+                    &texture_sizes,
+                    coords,
+                    0.0,
+                    0,
+                    color_top,
+                    color_bottom,
+                );
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    #[inline(never)]
     #[allow(clippy::too_many_arguments)]
     fn render_solid_rounded_corner(
         &self,

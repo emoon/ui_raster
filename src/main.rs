@@ -242,13 +242,9 @@ fn main() {
             height: tile_height as _,
         };
 
-        let t0 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
+        let t0 = color_from_u8(&srgb_to_linear, 0, 0, 0, 255);
         let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
-        let top_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
-
-        //let t0 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
-        //let t1 = color_from_u8(&srgb_to_linear, 255, 255, 255, 255);
-        //let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
+        let bottom_colors = [t0.0, t0.1, t0.2, t0.3, t1.0, t1.1, t1.2, t1.3];
 
         let radius = 8.0;
 
@@ -326,6 +322,19 @@ fn main() {
         );
         */
 
+        raster.render_gradient_quad(
+            &mut output,
+            &tile_info_2,
+            &coords,
+            //color_from_u8_i16x8(&srgb_to_linear, 0, 255, 0, 112),
+            crate::simd::i16x8::load_unaligned(&bottom_colors),
+            crate::simd::i16x8::load_unaligned(&bottom_colors),
+            //color_from_u8_i16x8(&srgb_to_linear, 255, 0, 0, 112),
+            raster::BlendMode::None,
+        );
+
+
+        /*
         raster.render_solid_quad_rounded(
             &mut output,
             &tile_info_2,
@@ -334,6 +343,7 @@ fn main() {
             radius,
             raster::BlendMode::None,
         );
+        */
 
         let coords = [
             clip_rect[0] as f32,
@@ -346,7 +356,7 @@ fn main() {
             &mut output,
             &tile_info_2,
             &coords,
-            color_from_u8_i16x8(&srgb_to_linear, 255, 0, 0, 127),
+            color_from_u8_i16x8(&srgb_to_linear, 255, 0, 0, 27),
             raster::BlendMode::WithBackground,
         );
 
