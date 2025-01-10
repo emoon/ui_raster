@@ -305,24 +305,6 @@ fn render_internal<
     let mut texture_ptr = texture_data; //.as_ptr();
     let mut texture_width = 0;
 
-    if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
-        // For aligned data we assume that UVs are in texture space range and not normalized
-        let uv = f32x4::load_unaligned(uv_data);
-        let uv_i = uv.as_i32x4();
-
-        let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1) * f32x4::new_splat(0x7fff as f32);
-        let uv_fraction = i16x8::new_splat(0x7fff) - uv_fraction.as_i32x4().as_i16x8();
-
-        fixed_u_fraction = uv_fraction.splat_0000_0000();
-        fixed_v_fraction = uv_fraction.splat_2222_2222();
-
-        texture_width = texture_sizes[0] as usize;
-
-        let u = uv_i.extract::<0>() as usize;
-        let v = uv_i.extract::<1>() as usize;
-
-        texture_ptr = unsafe { texture_ptr.add((v * texture_width + u) * 4) };
-    }
 
     // Calculate the difference between the scissor rect and the current rect
     // if diff is > 0 we return back a positive value to use for clipping
@@ -354,11 +336,33 @@ fn render_internal<
         xi_step = xi_step * i16x8::new_splat(2);
     }
 
+    if TEXTURE_MODE == TEXTURE_MODE_ALIGNED {
+        // For aligned data we assume that UVs are in texture space range and not normalized
+        let uv = f32x4::load_unaligned(uv_data);
+        let uv_i = uv.as_i32x4();
+
+        let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1) * f32x4::new_splat(0x7fff as f32);
+        let uv_fraction = i16x8::new_splat(0x7fff) - uv_fraction.as_i32x4().as_i16x8();
+
+        fixed_u_fraction = uv_fraction.splat_0000_0000();
+        fixed_v_fraction = uv_fraction.splat_2222_2222();
+
+        texture_width = texture_sizes[0] as usize;
+
+        let clip_x = clip_diff.extract::<0>() as usize;
+        let clip_y = clip_diff.extract::<1>() as usize;
+
+        // Get the starting point in the texture data and add the clip diff to get correct starting
+        // position of the texture
+
+        let u = uv_i.extract::<0>() as usize + clip_x;
+        let v = uv_i.extract::<1>() as usize + clip_y;
+
+        texture_ptr = unsafe { texture_ptr.add((v * texture_width + u) * 4) };
+    }
+
     // If we have rounded edges we need to adjust the start and end values
     if ROUND_MODE == ROUND_MODE_ENABLED {
-        let x0f = x0y0x1y1_adjust.extract::<0>();
-        let y0f = x0y0x1y1_adjust.extract::<1>();
-
         let center_adjust = CORNER_OFFSETS[radius_direction & 3];
 
         // TODO: Get the corret corner direction
@@ -366,7 +370,7 @@ fn render_internal<
         rounding_x_step = f32x4::new_splat(4.0);
         rounding_y_current = f32x4::new_splat(clip_diff.extract::<1>() as f32);
 
-        let uv_fraction = (x0y0x1y1_adjust - x0y0x1y1);
+        let uv_fraction = x0y0x1y1_adjust - x0y0x1y1;
 
         // TODO: Optimize 
         border_radius_v = f32x4::new_splat(border_radius);
@@ -557,8 +561,7 @@ impl Raster {
     }
 
     #[inline(never)]
-    pub fn render_aligned_texture(
-        scissor_rect: i32x4,
+    pub fn render_aligned_texture(&self,
         output: &mut [i16],
         tile_info: &TileInfo,
         coords: &[f32],
@@ -568,7 +571,7 @@ impl Raster {
     ) {
         render_internal::<COLOR_MODE_NONE, TEXTURE_MODE_ALIGNED, ROUND_MODE_NONE, BLEND_MODE_NONE>(
             output,
-            scissor_rect,
+            self.scissor_rect,
             texture_data,
             tile_info,
             uv_data,

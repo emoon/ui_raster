@@ -185,7 +185,7 @@ fn generate_test_texture(srgb_to_linear: &[u16; 256]) -> Texture {
 fn main() {
     let srgb_to_linear = build_srgb_to_linear_table();
     let linear_to_srgb = build_linear_to_srgb_table();
-    //let texture = read_texture("assets/uv.png", &srgb_to_linear);
+    let texture = read_texture("assets/uv.png", &srgb_to_linear);
     //let texture = generate_test_texture(&srgb_to_linear);
 
     let tile_width = 1280;
@@ -197,7 +197,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X4,
+            scale: Scale::X1,
             ..WindowOptions::default()
         },
     )
@@ -273,7 +273,6 @@ fn main() {
         }
         */
 
-        /*
         let uv_coords = [0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
         let texture_sizes = [
@@ -286,7 +285,6 @@ fn main() {
             texture.width as i32,
             texture.height as i32,
         ];
-        */
 
         /*
         unsafe {
@@ -302,9 +300,8 @@ fn main() {
             );
         }
         */
-
-        /*
-        raster::Raster::render_aligned_texture(
+        
+        raster.render_aligned_texture(
             &mut output,
             &tile_info_2,
             &coords,
@@ -313,6 +310,7 @@ fn main() {
             &texture_sizes,
         );
 
+        /*
         raster::Raster::render_solid_lerp(
             &mut output,
             &tile_info_2,
@@ -322,6 +320,7 @@ fn main() {
         );
         */
 
+        /*
         raster.render_gradient_quad(
             &mut output,
             &tile_info_2,
@@ -332,6 +331,7 @@ fn main() {
             //color_from_u8_i16x8(&srgb_to_linear, 255, 0, 0, 112),
             raster::BlendMode::None,
         );
+        */
 
 
         /*
